@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { queryItems } from '../lib/db';
+import { queryItems, escapeLike } from '../lib/db';
 import { useClipboardStore } from '../stores/clipboardStore';
 import type { ClipboardItem } from '../types/clipboard';
 
 export function useClipboardListener() {
   const { setItems } = useClipboardStore();
+  const requestId = useRef(0);
 
   const reloadItems = async () => {
+    const id = ++requestId.current;
     const { searchQuery, selectedGroup, showFavorites } = useClipboardStore.getState();
     let sql = 'SELECT * FROM items';
     const params: unknown[] = [];
@@ -15,7 +17,7 @@ export function useClipboardListener() {
 
     if (searchQuery) {
       conditions.push('(content LIKE ? OR preview LIKE ?)');
-      params.push(`%${searchQuery}%`, `%${searchQuery}%`);
+      params.push(`%${escapeLike(searchQuery)}%`, `%${escapeLike(searchQuery)}%`);
     }
 
     if (selectedGroup) {
@@ -33,11 +35,19 @@ export function useClipboardListener() {
 
     sql += ' ORDER BY last_used_at DESC LIMIT 500';
     const items = await queryItems(sql, params);
-    setItems(items as ClipboardItem[]);
+    if (id === requestId.current) {
+      setItems(items as ClipboardItem[]);
+    }
   };
 
   useEffect(() => {
-    reloadItems();
+    (async () => {
+      try {
+        await reloadItems();
+      } catch (err) {
+        console.error('Failed to load items:', err);
+      }
+    })();
 
     const unlistenClipboard = listen('clipboard-changed', () => {
       reloadItems();

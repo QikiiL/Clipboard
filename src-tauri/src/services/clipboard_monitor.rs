@@ -52,13 +52,13 @@ impl ClipboardMonitor {
 
                 // Read clipboard on a blocking thread to avoid arboard deadlocks
                 let clipboard_result =
-                    tokio::task::spawn_blocking(|| -> Option<(String, i32, Option<String>)> {
+                    tokio::task::spawn_blocking(|| -> Option<(String, i32, Option<String>, Option<Vec<u8>>)> {
                         let mut cb = ArboardClipboard::new().ok()?;
                         // Try image first
                         if let Ok(img) = cb.get_image() {
                             let bytes = img.bytes.to_vec();
                             let hash = compute_hash_bytes(&bytes);
-                            return Some(("[图片]".to_string(), 2, Some(hash)));
+                            return Some(("[图片]".to_string(), 2, Some(hash), Some(bytes)));
                         }
                         // Try text
                         if let Ok(text) = cb.get_text() {
@@ -69,7 +69,7 @@ impl ClipboardMonitor {
                                     } else {
                                         0
                                     };
-                                return Some((text, item_type, None));
+                                return Some((text, item_type, None, None));
                             }
                         }
                         None
@@ -77,7 +77,7 @@ impl ClipboardMonitor {
                     .await
                     .unwrap_or(None);
 
-                let Some((content, item_type, image_hash)) = clipboard_result else {
+                let Some((content, item_type, image_hash, image_bytes)) = clipboard_result else {
                     continue;
                 };
 
@@ -108,21 +108,13 @@ impl ClipboardMonitor {
 
                 // Save image bytes to file if it's an image
                 let file_path: Option<String> = if item_type == 2 {
-                    let images_dir = app_handle
-                        .path()
-                        .app_data_dir()
-                        .unwrap_or_default()
-                        .join("images");
-                    let _ = std::fs::create_dir_all(&images_dir);
-                    // Re-read image to save bytes
-                    let bytes = tokio::task::spawn_blocking(|| -> Option<Vec<u8>> {
-                        let mut cb = ArboardClipboard::new().ok()?;
-                        let img = cb.get_image().ok()?;
-                        Some(img.bytes.to_vec())
-                    })
-                    .await
-                    .unwrap_or(None);
-                    if let Some(bytes) = bytes {
+                    if let Some(bytes) = image_bytes {
+                        let images_dir = app_handle
+                            .path()
+                            .app_data_dir()
+                            .unwrap_or_default()
+                            .join("images");
+                        let _ = std::fs::create_dir_all(&images_dir);
                         let file_name = format!("{}.png", &hash[..16]);
                         let path = images_dir.join(&file_name);
                         let _ = std::fs::write(&path, &bytes);
@@ -158,7 +150,7 @@ impl ClipboardMonitor {
                         .await;
                         // Double-check suppress wasn't set during our write
                         if *monitor.suppress.lock().await {
-                            return;
+                            continue;
                         }
                         let _ = app_handle.emit(
                             "clipboard-changed",
@@ -180,7 +172,7 @@ impl ClipboardMonitor {
                         if result.is_ok() {
                             // Double-check suppress wasn't set during our write
                             if *monitor.suppress.lock().await {
-                                return;
+                                continue;
                             }
                             let _ = app_handle.emit(
                                 "clipboard-changed",

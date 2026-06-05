@@ -30,16 +30,21 @@ pub async fn paste_item(app_handle: tauri::AppHandle, id: i64) -> Result<(), Str
     monitor.set_suppress(false).await;
 
     if result.is_ok() {
-        let _ = sqlx::query(
+        if let Err(e) = sqlx::query(
             "UPDATE items SET copy_count = copy_count + 1, last_used_at = datetime('now') WHERE id = ?",
         )
         .bind(id)
         .execute(&*db)
-        .await;
-        let _ = app_handle.emit(
+        .await
+        {
+            eprintln!("Failed to update copy count: {}", e);
+        }
+        if let Err(e) = app_handle.emit(
             "clipboard-changed",
             serde_json::json!({"action": "updated", "id": id}),
-        );
+        ) {
+            eprintln!("Failed to emit clipboard-changed event: {}", e);
+        }
     }
 
     result

@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
-import { queryItems } from '../lib/db';
+import { useEffect, useRef } from 'react';
+import { queryItems, escapeLike } from '../lib/db';
 import { useClipboardStore } from '../stores/clipboardStore';
 import type { ClipboardItem } from '../types/clipboard';
 import type { ClipboardGroup } from '../types/group';
 
 export function useDatabase() {
   const { setItems, setGroups, setLoading } = useClipboardStore();
+  const requestId = useRef(0);
 
   const loadItems = async (searchQuery?: string, groupId?: number | null, favoritesOnly?: boolean) => {
+    const id = ++requestId.current;
     setLoading(true);
     try {
       let sql = 'SELECT * FROM items';
@@ -16,7 +18,7 @@ export function useDatabase() {
 
       if (searchQuery) {
         conditions.push('(content LIKE ? OR preview LIKE ?)');
-        params.push(`%${searchQuery}%`, `%${searchQuery}%`);
+        params.push(`%${escapeLike(searchQuery)}%`, `%${escapeLike(searchQuery)}%`);
       }
 
       if (groupId !== undefined && groupId !== null) {
@@ -34,9 +36,13 @@ export function useDatabase() {
 
       sql += ' ORDER BY last_used_at DESC LIMIT 500';
       const items = await queryItems(sql, params);
-      setItems(items as ClipboardItem[]);
+      if (id === requestId.current) {
+        setItems(items as ClipboardItem[]);
+      }
     } finally {
-      setLoading(false);
+      if (id === requestId.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -46,7 +52,13 @@ export function useDatabase() {
   };
 
   useEffect(() => {
-    loadGroups();
+    (async () => {
+      try {
+        await loadGroups();
+      } catch (err) {
+        console.error('Failed to load groups:', err);
+      }
+    })();
   }, []);
 
   return { loadItems, loadGroups };

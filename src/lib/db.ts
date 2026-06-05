@@ -17,6 +17,10 @@ function mapItem(item: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
+export function escapeLike(s: string): string {
+  return s.replace(/[%_[\]]/g, (ch) => `\\${ch}`);
+}
+
 export async function queryItems<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
   const db = await getDb();
   const results = await db.select(sql, params) as Record<string, unknown>[];

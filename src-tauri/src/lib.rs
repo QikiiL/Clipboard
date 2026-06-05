@@ -45,11 +45,8 @@ pub fn run() {
             let db_path = app_config_dir.join("clipboard.db");
             // Use sqlite:// prefix with forward slashes for cross-platform compatibility
             let db_url = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
-            eprintln!("DB path: {:?}", db_path);
-            eprintln!("DB URL: {}", db_url);
 
-            let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-            let db = rt.block_on(async {
+            let db = tauri::async_runtime::block_on(async {
                 let pool = sqlx::sqlite::SqlitePool::connect(&db_url)
                     .await
                     .expect("Failed to connect to SQLite");

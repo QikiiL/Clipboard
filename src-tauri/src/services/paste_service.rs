@@ -28,19 +28,16 @@ pub fn copy_and_paste_text(text: &str) -> Result<(), String> {
 
 /// 粘贴指定内容
 pub async fn paste_content(content: &str, item_type: i32, file_path: Option<&str>) -> Result<(), String> {
-    match item_type {
-        0 | 1 => {
-            // Text or Link
-            copy_and_paste_text(content)?;
+    let content = content.to_string();
+    let file_path = file_path.map(|s| s.to_string());
+    tokio::task::spawn_blocking(move || {
+        match item_type {
+            0 | 1 => copy_and_paste_text(&content),
+            2 => {
+                let path = file_path.as_deref().unwrap_or(&content);
+                copy_and_paste_text(path)
+            }
+            _ => copy_and_paste_text(&content),
         }
-        2 => {
-            // Image - 复制文件路径到剪切板
-            let path = file_path.unwrap_or(content);
-            copy_and_paste_text(path)?;
-        }
-        _ => {
-            copy_and_paste_text(content)?;
-        }
-    }
-    Ok(())
+    }).await.map_err(|e| e.to_string())?
 }
