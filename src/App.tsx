@@ -1,5 +1,6 @@
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SearchBar } from './components/SearchBar';
+import { GroupTabs } from './components/GroupTabs';
 import { ClipboardList } from './components/ClipboardList';
 import { useClipboardListener } from './hooks/useClipboardListener';
 import { useDatabase } from './hooks/useDatabase';
@@ -16,6 +17,7 @@ function AppContent() {
         </h1>
       </header>
       <SearchBar />
+      <GroupTabs />
       <ClipboardList />
     </div>
   );
