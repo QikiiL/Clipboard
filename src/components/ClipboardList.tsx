@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useClipboardStore } from '../stores/clipboardStore';
 import { ClipboardItemCard } from './ClipboardItem';
 import { invoke } from '@tauri-apps/api/core';
@@ -6,29 +7,29 @@ import type { ClipboardItem as ClipboardItemType } from '../types/clipboard';
 export function ClipboardList() {
   const { items, isLoading } = useClipboardStore();
 
-  const handlePaste = async (item: ClipboardItemType) => {
+  const handlePaste = useCallback(async (item: ClipboardItemType) => {
     try {
       await invoke('paste_item', { id: item.id });
     } catch (err) {
       console.error('Paste failed:', err);
     }
-  };
+  }, []);
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = useCallback(async (id: number) => {
     try {
       await invoke('delete_item', { id });
     } catch (err) {
       console.error('Delete failed:', err);
     }
-  };
+  }, []);
 
-  const handleToggleFavorite = async (id: number) => {
+  const handleToggleFavorite = useCallback(async (id: number) => {
     try {
       await invoke('toggle_favorite', { id });
     } catch (err) {
       console.error('Toggle favorite failed:', err);
     }
-  };
+  }, []);
 
   if (isLoading) {
     return (

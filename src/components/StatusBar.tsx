@@ -2,6 +2,7 @@ import { useClipboardStore } from '../stores/clipboardStore';
 
 export function StatusBar() {
   const items = useClipboardStore((s) => s.items);
+  const isPaused = useClipboardStore((s) => s.isPaused);
   const totalCount = items.length;
   const favoriteCount = items.filter((i) => i.is_favorite).length;
 
@@ -12,8 +13,8 @@ export function StatusBar() {
         <span>⭐ {favoriteCount} 收藏</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-green-500" title="监听中" />
-        <span>监听中</span>
+        <span className={`w-2 h-2 rounded-full ${isPaused ? 'bg-yellow-500' : 'bg-green-500'}`} title={isPaused ? '已暂停' : '监听中'} />
+        <span>{isPaused ? '已暂停' : '监听中'}</span>
       </div>
     </div>
   );

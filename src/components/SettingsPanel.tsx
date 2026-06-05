@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useTheme } from '../contexts/ThemeContext';
+import { useClipboardStore } from '../stores/clipboardStore';
 import type { AppSettings } from '../types/settings';
 import { DEFAULT_SETTINGS } from '../types/settings';
 
@@ -12,17 +13,31 @@ interface Props {
 export function SettingsPanel({ isOpen, onClose }: Props) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const { theme, toggleTheme } = useTheme();
+  const setPaused = useClipboardStore((s) => s.setPaused);
 
   useEffect(() => {
     if (isOpen) {
-      invoke<AppSettings>('load_settings').then(setSettings).catch(console.error);
+      invoke<AppSettings>('load_settings').then((s) => {
+        setSettings(s);
+        setPaused(s.paused);
+      }).catch(console.error);
     }
-  }, [isOpen]);
+  }, [isOpen, setPaused]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
 
   const handleSave = async () => {
     try {
       await invoke('save_settings', { settings });
       await invoke('pause_monitoring', { paused: settings.paused });
+      setPaused(settings.paused);
       await invoke('register_hotkey', {
         modifier: settings.hotkey_modifier,
         key: settings.hotkey_key,
@@ -49,6 +64,9 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
             <span className="text-sm font-medium">深色模式</span>
             <button
               onClick={toggleTheme}
+              role="switch"
+              aria-checked={theme === 'dark'}
+              aria-label="深色模式"
               className={`relative w-12 h-6 rounded-full transition-colors ${
                 theme === 'dark' ? 'bg-blue-500' : 'bg-gray-300'
               }`}
@@ -112,6 +130,9 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
             <span className="text-sm font-medium">开机自启动</span>
             <button
               onClick={() => setSettings({ ...settings, start_with_windows: !settings.start_with_windows })}
+              role="switch"
+              aria-checked={settings.start_with_windows}
+              aria-label="开机自启动"
               className={`relative w-12 h-6 rounded-full transition-colors ${
                 settings.start_with_windows ? 'bg-blue-500' : 'bg-gray-300'
               }`}
@@ -127,6 +148,9 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
             <span className="text-sm font-medium">暂停监听</span>
             <button
               onClick={() => setSettings({ ...settings, paused: !settings.paused })}
+              role="switch"
+              aria-checked={settings.paused}
+              aria-label="暂停监听"
               className={`relative w-12 h-6 rounded-full transition-colors ${
                 settings.paused ? 'bg-blue-500' : 'bg-gray-300'
               }`}
