@@ -100,8 +100,8 @@ impl ClipboardMonitor {
                     continue;
                 }
 
-                let preview = if content.len() > 100 {
-                    content[..100].to_string()
+                let preview = if content.chars().count() > 100 {
+                    content.chars().take(100).collect::<String>()
                 } else {
                     content.clone()
                 };

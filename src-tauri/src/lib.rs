@@ -47,9 +47,23 @@ pub fn run() {
 
             let db = tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
-                    sqlx::sqlite::SqlitePool::connect(&db_url)
+                    let pool = sqlx::sqlite::SqlitePool::connect(&db_url)
                         .await
-                        .expect("Failed to connect to SQLite")
+                        .expect("Failed to connect to SQLite");
+
+                    // Enable WAL mode to prevent lock contention with tauri_plugin_sql
+                    sqlx::query("PRAGMA journal_mode=WAL")
+                        .execute(&pool)
+                        .await
+                        .expect("Failed to enable WAL mode");
+
+                    // Set busy timeout so writers wait instead of failing immediately
+                    sqlx::query("PRAGMA busy_timeout=5000")
+                        .execute(&pool)
+                        .await
+                        .expect("Failed to set busy timeout");
+
+                    pool
                 })
             });
 
