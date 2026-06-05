@@ -17,10 +17,10 @@ function mapItem(item: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
-export async function queryItems(sql: string, params: unknown[] = []) {
+export async function queryItems<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
   const db = await getDb();
-  const results = await db.select(sql, params);
-  return results.map(mapItem);
+  const results = await db.select(sql, params) as Record<string, unknown>[];
+  return results.map(mapItem) as unknown as T[];
 }
 
 export async function executeSql(sql: string, params: unknown[] = []) {
