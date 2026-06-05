@@ -34,4 +34,12 @@ mod tests {
         assert_eq!(settings.max_item_count, 500);
         assert!(!settings.paused);
     }
+
+    #[test]
+    fn test_settings_serialization() {
+        let settings = AppSettings::default();
+        let json = serde_json::to_string(&settings).unwrap();
+        let deserialized: AppSettings = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.retention_days, settings.retention_days);
+    }
 }
