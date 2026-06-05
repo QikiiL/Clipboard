@@ -156,6 +156,10 @@ impl ClipboardMonitor {
                         .bind(id)
                         .execute(&db)
                         .await;
+                        // Double-check suppress wasn't set during our write
+                        if *monitor.suppress.lock().await {
+                            return;
+                        }
                         let _ = app_handle.emit(
                             "clipboard-changed",
                             serde_json::json!({"action": "updated", "id": id}),
@@ -174,6 +178,10 @@ impl ClipboardMonitor {
                         .await;
 
                         if result.is_ok() {
+                            // Double-check suppress wasn't set during our write
+                            if *monitor.suppress.lock().await {
+                                return;
+                            }
                             let _ = app_handle.emit(
                                 "clipboard-changed",
                                 serde_json::json!({"action": "new"}),

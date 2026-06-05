@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use sha2::{Digest, Sha256};
 
 pub fn compute_hash(content: &str) -> String {

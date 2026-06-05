@@ -18,8 +18,3 @@ export interface ClipboardItem {
   created_at: string;
   last_used_at: string;
 }
-
-export interface ClipboardChangedPayload {
-  item: ClipboardItem;
-  action: 'new' | 'updated';
-}
