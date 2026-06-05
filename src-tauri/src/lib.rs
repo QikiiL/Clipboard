@@ -45,38 +45,34 @@ pub fn run() {
             let db_path = app_config_dir.join("clipboard.db");
             let db_url = format!("sqlite:{}", db_path.to_string_lossy());
 
-            let db = tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    let pool = sqlx::sqlite::SqlitePool::connect(&db_url)
-                        .await
-                        .expect("Failed to connect to SQLite");
+            let db = tauri::async_runtime::block_on(async {
+                let pool = sqlx::sqlite::SqlitePool::connect(&db_url)
+                    .await
+                    .expect("Failed to connect to SQLite");
 
-                    // Enable WAL mode to prevent lock contention with tauri_plugin_sql
-                    sqlx::query("PRAGMA journal_mode=WAL")
-                        .execute(&pool)
-                        .await
-                        .expect("Failed to enable WAL mode");
+                // Enable WAL mode to prevent lock contention with tauri_plugin_sql
+                sqlx::query("PRAGMA journal_mode=WAL")
+                    .execute(&pool)
+                    .await
+                    .expect("Failed to enable WAL mode");
 
-                    // Set busy timeout so writers wait instead of failing immediately
-                    sqlx::query("PRAGMA busy_timeout=5000")
-                        .execute(&pool)
-                        .await
-                        .expect("Failed to set busy timeout");
+                // Set busy timeout so writers wait instead of failing immediately
+                sqlx::query("PRAGMA busy_timeout=5000")
+                    .execute(&pool)
+                    .await
+                    .expect("Failed to set busy timeout");
 
-                    pool
-                })
+                pool
             });
 
             // Run migrations manually
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    for migration in get_migrations() {
-                        sqlx::query(migration.sql)
-                            .execute(&db)
-                            .await
-                            .expect("Failed to run migration");
-                    }
-                })
+            tauri::async_runtime::block_on(async {
+                for migration in get_migrations() {
+                    sqlx::query(migration.sql)
+                        .execute(&db)
+                        .await
+                        .expect("Failed to run migration");
+                }
             });
 
             app.manage(db.clone());
@@ -97,7 +93,7 @@ pub fn run() {
 
             // 启动定时清理任务（每小时）
             let app_handle_cleanup = app.handle().clone();
-            tokio::spawn(async move {
+            tauri::async_runtime::spawn(async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
                 loop {
                     interval.tick().await;
