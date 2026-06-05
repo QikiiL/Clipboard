@@ -3,6 +3,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { SearchBar } from './components/SearchBar';
 import { GroupTabs } from './components/GroupTabs';
 import { ClipboardList } from './components/ClipboardList';
+import { StatusBar } from './components/StatusBar';
 import { SettingsPanel } from './components/SettingsPanel';
 import { useClipboardListener } from './hooks/useClipboardListener';
 import { useDatabase } from './hooks/useDatabase';
@@ -29,6 +30,7 @@ function AppContent() {
       <SearchBar />
       <GroupTabs />
       <ClipboardList />
+      <StatusBar />
       <SettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
