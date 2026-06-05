@@ -42,7 +42,7 @@ impl ClipboardMonitor {
     /// Start polling the system clipboard for changes.
     pub fn start_polling(app_handle: tauri::AppHandle, db: SqlitePool, monitor: ClipboardMonitor) {
         let monitor = monitor.clone();
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
             loop {
                 interval.tick().await;

@@ -43,11 +43,9 @@ pub fn run() {
                 .expect("No app config dir found");
             let _ = std::fs::create_dir_all(&app_config_dir);
             let db_path = app_config_dir.join("clipboard.db");
-            // Use sqlite:/// prefix (three slashes) for absolute paths on Windows
-            // sqlite://C:/... is wrong — sqlx treats C: as hostname
-            let db_url = format!("sqlite:///{}", db_path.to_string_lossy().replace('\\', "/"));
-            eprintln!("DB path: {:?}", db_path);
-            eprintln!("DB URL: {}", db_url);
+            // Use sqlite: prefix with forward slashes for Windows compatibility
+            let db_path_str = db_path.to_string_lossy().replace('\\', "/");
+            let db_url = format!("sqlite:{}", db_path_str);
 
             let db = tauri::async_runtime::block_on(async {
                 let pool = sqlx::sqlite::SqlitePool::connect(&db_url)
