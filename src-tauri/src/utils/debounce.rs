@@ -27,7 +27,7 @@ impl Debouncer {
         let delay = self.delay;
         *handle = Some(tokio::spawn(async move {
             tokio::time::sleep(delay).await;
-            f().await;
+            f.await;
         }));
     }
 }

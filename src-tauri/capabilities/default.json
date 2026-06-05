@@ -10,7 +10,7 @@
     "global-shortcut:default",
     "sql:default",
     "store:default",
-    "clipboard:default",
+    "clipboard-manager:default",
     "core:tray:default",
     "autostart:default"
   ]
