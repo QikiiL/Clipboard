@@ -43,6 +43,84 @@ impl ClipboardMonitor {
     pub fn start_polling(app_handle: tauri::AppHandle, db: SqlitePool, monitor: ClipboardMonitor) {
         let monitor = monitor.clone();
         tauri::async_runtime::spawn(async move {
+            // Initial clipboard capture on startup
+            let initial_clipboard = tokio::task::spawn_blocking(|| -> Option<(String, i32, Option<String>, Option<Vec<u8>>)> {
+                let mut cb = ArboardClipboard::new().ok()?;
+                if let Ok(img) = cb.get_image() {
+                    let bytes = img.bytes.to_vec();
+                    let hash = compute_hash_bytes(&bytes);
+                    return Some(("[图片]".to_string(), 2, Some(hash), Some(bytes)));
+                }
+                if let Ok(text) = cb.get_text() {
+                    if !text.is_empty() {
+                        let item_type = if text.starts_with("http://") || text.starts_with("https://") { 1 } else { 0 };
+                        return Some((text, item_type, None, None));
+                    }
+                }
+                None
+            }).await.unwrap_or(None);
+
+            if let Some((content, item_type, image_hash, image_bytes)) = initial_clipboard {
+                let hash = if let Some(ih) = image_hash { ih } else { compute_hash(&content) };
+                let preview = if content.chars().count() > 100 {
+                    content.chars().take(100).collect::<String>()
+                } else {
+                    content.clone()
+                };
+
+                let file_path: Option<String> = if item_type == 2 {
+                    if let Some(bytes) = image_bytes {
+                        let images_dir = app_handle
+                            .path()
+                            .app_data_dir()
+                            .unwrap_or_default()
+                            .join("images");
+                        let _ = std::fs::create_dir_all(&images_dir);
+                        let file_name = format!("{}.png", &hash[..16]);
+                        let path = images_dir.join(&file_name);
+                        if std::fs::write(&path, &bytes).is_ok() {
+                            Some(path.to_string_lossy().to_string())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                {
+                    let mut last = monitor.last_hash.lock().await;
+                    *last = hash.clone();
+                }
+
+                let existing = sqlx::query_scalar::<_, i64>(
+                    "SELECT id FROM items WHERE content_hash = ? LIMIT 1",
+                )
+                .bind(&hash)
+                .fetch_optional(&db)
+                .await;
+
+                match existing {
+                    Ok(Some(_)) => {
+                        // Already exists, skip
+                    }
+                    _ => {
+                        let _ = sqlx::query(
+                            "INSERT INTO items (type, content, content_hash, file_path, preview) VALUES (?, ?, ?, ?, ?)",
+                        )
+                        .bind(item_type)
+                        .bind(&content)
+                        .bind(&hash)
+                        .bind(&file_path)
+                        .bind(&preview)
+                        .execute(&db)
+                        .await;
+                    }
+                }
+            }
+
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
             loop {
                 interval.tick().await;

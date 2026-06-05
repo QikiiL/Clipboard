@@ -101,6 +101,12 @@ pub fn run() {
                 }
             });
 
+            // Show window on first launch
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
