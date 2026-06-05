@@ -1,13 +1,11 @@
-// Implemented in Task 15
+use crate::models::settings::AppSettings;
 
 #[tauri::command]
-pub async fn save_settings(_settings: serde_json::Value) -> Result<(), String> {
-    // TODO: Implement in Task 15
-    Ok(())
+pub fn load_settings(app_handle: tauri::AppHandle) -> Result<AppSettings, String> {
+    Ok(crate::services::settings_service::load_settings(&app_handle))
 }
 
 #[tauri::command]
-pub async fn load_settings() -> Result<serde_json::Value, String> {
-    // TODO: Implement in Task 15
-    Ok(serde_json::Value::Null)
+pub fn save_settings(app_handle: tauri::AppHandle, settings: AppSettings) -> Result<(), String> {
+    crate::services::settings_service::save_settings(&app_handle, &settings)
 }
