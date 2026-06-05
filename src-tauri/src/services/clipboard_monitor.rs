@@ -1,13 +1,14 @@
 use crate::utils::hash::compute_hash;
-use crate::utils::debounce::Debouncer;
+use arboard::Clipboard as ArboardClipboard;
+use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
 pub struct ClipboardMonitor {
     suppress: Arc<Mutex<bool>>,
     paused: Arc<Mutex<bool>>,
-    debouncer: Debouncer,
+    last_hash: Arc<Mutex<String>>,
 }
 
 impl ClipboardMonitor {
@@ -15,7 +16,7 @@ impl ClipboardMonitor {
         Self {
             suppress: Arc::new(Mutex::new(false)),
             paused: Arc::new(Mutex::new(false)),
-            debouncer: Debouncer::new(100),
+            last_hash: Arc::new(Mutex::new(String::new())),
         }
     }
 
@@ -38,80 +39,150 @@ impl ClipboardMonitor {
         *paused = !*paused;
     }
 
-    pub async fn handle_clipboard_change(
-        &self,
-        app_handle: tauri::AppHandle,
-        content: String,
-        item_type: i32,
-        file_path: Option<String>,
-    ) {
-        if *self.suppress.lock().await || *self.paused.lock().await {
-            return;
-        }
-
-        let suppress = Arc::clone(&self.suppress);
-        let paused = Arc::clone(&self.paused);
-
-        self.debouncer.debounce(async move {
-            if *suppress.lock().await || *paused.lock().await {
-                return;
-            }
-
-            let hash = compute_hash(&content);
-            let preview = if content.len() > 100 {
-                content[..100].to_string()
-            } else {
-                content.clone()
-            };
-
-            let db = match tauri_plugin_sql::DbPool::get(&app_handle, "sqlite:clipboard.db").await {
-                Ok(db) => db,
-                Err(e) => {
-                    eprintln!("Failed to get DB: {}", e);
-                    return;
+    /// Start polling the system clipboard for changes.
+    pub fn start_polling(app_handle: tauri::AppHandle, db: SqlitePool, monitor: ClipboardMonitor) {
+        let monitor = monitor.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
+            loop {
+                interval.tick().await;
+                if *monitor.suppress.lock().await || *monitor.paused.lock().await {
+                    continue;
                 }
-            };
 
-            let existing = db
-                .select(
-                    "SELECT id, copy_count FROM items WHERE content_hash = ? LIMIT 1",
-                    vec![serde_json::Value::String(hash.clone())],
+                // Read clipboard on a blocking thread to avoid arboard deadlocks
+                let clipboard_result =
+                    tokio::task::spawn_blocking(|| -> Option<(String, i32, Option<String>)> {
+                        let mut cb = ArboardClipboard::new().ok()?;
+                        // Try image first
+                        if let Ok(img) = cb.get_image() {
+                            let bytes = img.bytes.to_vec();
+                            let hash = compute_hash(&format!("img:{:?}", &bytes[..std::cmp::min(64, bytes.len())]));
+                            return Some(("[图片]".to_string(), 2, Some(hash)));
+                        }
+                        // Try text
+                        if let Ok(text) = cb.get_text() {
+                            if !text.is_empty() {
+                                let item_type =
+                                    if text.starts_with("http://") || text.starts_with("https://") {
+                                        1
+                                    } else {
+                                        0
+                                    };
+                                return Some((text, item_type, None));
+                            }
+                        }
+                        None
+                    })
+                    .await
+                    .unwrap_or(None);
+
+                let Some((content, item_type, image_hash)) = clipboard_result else {
+                    continue;
+                };
+
+                let hash = if let Some(ih) = image_hash {
+                    ih
+                } else {
+                    compute_hash(&content)
+                };
+
+                // Skip if same as last
+                {
+                    let last = monitor.last_hash.lock().await;
+                    if *last == hash {
+                        continue;
+                    }
+                }
+
+                // Skip if suppress/paused changed during blocking read
+                if *monitor.suppress.lock().await || *monitor.paused.lock().await {
+                    continue;
+                }
+
+                let preview = if content.len() > 100 {
+                    content[..100].to_string()
+                } else {
+                    content.clone()
+                };
+
+                // Save image bytes to file if it's an image
+                let file_path: Option<String> = if item_type == 2 {
+                    let images_dir = app_handle
+                        .path()
+                        .app_data_dir()
+                        .unwrap_or_default()
+                        .join("images");
+                    let _ = std::fs::create_dir_all(&images_dir);
+                    // Re-read image to save bytes
+                    let bytes = tokio::task::spawn_blocking(|| -> Option<Vec<u8>> {
+                        let mut cb = ArboardClipboard::new().ok()?;
+                        let img = cb.get_image().ok()?;
+                        Some(img.bytes.to_vec())
+                    })
+                    .await
+                    .unwrap_or(None);
+                    if let Some(bytes) = bytes {
+                        let file_name = format!("{}.png", &hash[..16]);
+                        let path = images_dir.join(&file_name);
+                        let _ = std::fs::write(&path, &bytes);
+                        Some(path.to_string_lossy().to_string())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                // Update last hash
+                {
+                    let mut last = monitor.last_hash.lock().await;
+                    *last = hash.clone();
+                }
+
+                // Check for existing item
+                let existing = sqlx::query_scalar::<_, i64>(
+                    "SELECT id FROM items WHERE content_hash = ? LIMIT 1",
                 )
+                .bind(&hash)
+                .fetch_optional(&db)
                 .await;
 
-            match existing {
-                Ok(rows) if !rows.is_empty() => {
-                    let id = rows[0].get("id").and_then(|v| v.as_i64()).unwrap_or(0);
-                    let _ = db
-                        .execute(
+                match existing {
+                    Ok(Some(id)) => {
+                        let _ = sqlx::query(
                             "UPDATE items SET copy_count = copy_count + 1, last_used_at = datetime('now') WHERE id = ?",
-                            vec![serde_json::Value::Number(id.into())],
                         )
+                        .bind(id)
+                        .execute(&db)
                         .await;
-                    let _ = app_handle.emit("clipboard-changed", serde_json::json!({
-                        "action": "updated",
-                        "id": id,
-                    }));
-                }
-                _ => {
-                    let _ = db
-                        .execute(
+                        let _ = app_handle.emit(
+                            "clipboard-changed",
+                            serde_json::json!({"action": "updated", "id": id}),
+                        );
+                    }
+                    _ => {
+                        let result = sqlx::query(
                             "INSERT INTO items (type, content, content_hash, file_path, preview) VALUES (?, ?, ?, ?, ?)",
-                            vec![
-                                serde_json::Value::Number(item_type.into()),
-                                serde_json::Value::String(content),
-                                serde_json::Value::String(hash),
-                                file_path.map(serde_json::Value::String).unwrap_or(serde_json::Value::Null),
-                                serde_json::Value::String(preview),
-                            ],
                         )
+                        .bind(item_type)
+                        .bind(&content)
+                        .bind(&hash)
+                        .bind(&file_path)
+                        .bind(&preview)
+                        .execute(&db)
                         .await;
-                    let _ = app_handle.emit("clipboard-changed", serde_json::json!({
-                        "action": "new",
-                    }));
+
+                        if result.is_ok() {
+                            let _ = app_handle.emit(
+                                "clipboard-changed",
+                                serde_json::json!({"action": "new"}),
+                            );
+                        }
+                    }
                 }
             }
-        }).await;
+        });
     }
 }
 
@@ -120,7 +191,7 @@ impl Clone for ClipboardMonitor {
         Self {
             suppress: Arc::clone(&self.suppress),
             paused: Arc::clone(&self.paused),
-            debouncer: self.debouncer.clone(),
+            last_hash: Arc::clone(&self.last_hash),
         }
     }
 }

@@ -1,49 +1,45 @@
-use tauri::Manager;
+use sqlx::sqlite::SqlitePool;
+use tauri::{Emitter, Manager};
 
 #[tauri::command]
 pub async fn paste_item(app_handle: tauri::AppHandle, id: i64) -> Result<(), String> {
     let monitor = app_handle.state::<crate::services::clipboard_monitor::ClipboardMonitor>();
+    let db = app_handle.state::<SqlitePool>();
 
-    let db = tauri_plugin_sql::DbPool::get(&app_handle, "sqlite:clipboard.db")
-        .await
-        .map_err(|e| e.to_string())?;
+    let row = sqlx::query_as::<_, (String, i32, Option<String>)>(
+        "SELECT content, type, file_path FROM items WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_optional(&*db)
+    .await
+    .map_err(|e| e.to_string())?;
 
-    let rows = db
-        .select(
-            "SELECT content, type, file_path FROM items WHERE id = ?",
-            vec![serde_json::Value::Number(id.into())],
-        )
-        .await
-        .map_err(|e| e.to_string())?;
-
-    if rows.is_empty() {
-        return Err("Item not found".to_string());
-    }
-
-    let row = &rows[0];
-    let content = row.get("content").and_then(|v| v.as_str()).unwrap_or("");
-    let item_type = row.get("type").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-    let file_path = row.get("file_path").and_then(|v| v.as_str());
+    let (content, item_type, file_path) = row.ok_or_else(|| "Item not found".to_string())?;
 
     monitor.set_suppress(true).await;
 
-    let result = crate::services::paste_service::paste_content(content, item_type, file_path).await;
+    let result = crate::services::paste_service::paste_content(
+        &content,
+        item_type,
+        file_path.as_deref(),
+    )
+    .await;
 
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     monitor.set_suppress(false).await;
 
     if result.is_ok() {
-        let _ = db
-            .execute(
-                "UPDATE items SET copy_count = copy_count + 1, last_used_at = datetime('now') WHERE id = ?",
-                vec![serde_json::Value::Number(id.into())],
-            )
-            .await;
-        let _ = app_handle.emit("clipboard-changed", serde_json::json!({
-            "action": "updated",
-            "id": id,
-        }));
+        let _ = sqlx::query(
+            "UPDATE items SET copy_count = copy_count + 1, last_used_at = datetime('now') WHERE id = ?",
+        )
+        .bind(id)
+        .execute(&*db)
+        .await;
+        let _ = app_handle.emit(
+            "clipboard-changed",
+            serde_json::json!({"action": "updated", "id": id}),
+        );
     }
 
     result
@@ -51,16 +47,13 @@ pub async fn paste_item(app_handle: tauri::AppHandle, id: i64) -> Result<(), Str
 
 #[tauri::command]
 pub async fn delete_item(app_handle: tauri::AppHandle, id: i64) -> Result<(), String> {
-    let db = tauri_plugin_sql::DbPool::get(&app_handle, "sqlite:clipboard.db")
+    let db = app_handle.state::<SqlitePool>();
+
+    sqlx::query("DELETE FROM items WHERE id = ?")
+        .bind(id)
+        .execute(&*db)
         .await
         .map_err(|e| e.to_string())?;
-
-    db.execute(
-        "DELETE FROM items WHERE id = ?",
-        vec![serde_json::Value::Number(id.into())],
-    )
-    .await
-    .map_err(|e| e.to_string())?;
 
     let _ = app_handle.emit("item-deleted", id);
     Ok(())
@@ -68,21 +61,18 @@ pub async fn delete_item(app_handle: tauri::AppHandle, id: i64) -> Result<(), St
 
 #[tauri::command]
 pub async fn toggle_favorite(app_handle: tauri::AppHandle, id: i64) -> Result<(), String> {
-    let db = tauri_plugin_sql::DbPool::get(&app_handle, "sqlite:clipboard.db")
+    let db = app_handle.state::<SqlitePool>();
+
+    sqlx::query("UPDATE items SET is_favorite = NOT is_favorite WHERE id = ?")
+        .bind(id)
+        .execute(&*db)
         .await
         .map_err(|e| e.to_string())?;
 
-    db.execute(
-        "UPDATE items SET is_favorite = NOT is_favorite WHERE id = ?",
-        vec![serde_json::Value::Number(id.into())],
-    )
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let _ = app_handle.emit("clipboard-changed", serde_json::json!({
-        "action": "updated",
-        "id": id,
-    }));
+    let _ = app_handle.emit(
+        "clipboard-changed",
+        serde_json::json!({"action": "updated", "id": id}),
+    );
     Ok(())
 }
 

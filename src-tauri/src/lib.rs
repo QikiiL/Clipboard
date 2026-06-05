@@ -8,7 +8,18 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_global_shortcut::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().with_handler(|app, _shortcut, event| {
+            use tauri::Manager;
+            use tauri_plugin_global_shortcut::ShortcutState;
+            if event.state == ShortcutState::Pressed {
+                if let Some(window) = app.get_webview_window("main") {
+                    if !window.is_visible().unwrap_or(false) {
+                        let _ = window.show();
+                    }
+                    let _ = window.set_focus();
+                }
+            }
+        }).build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_autostart::init(
@@ -21,72 +32,54 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            use tauri::Manager;
+
             services::tray_service::create_tray(app)?;
 
-            // Register clipboard monitor
+            // Create our own sqlx pool for direct DB access
+            let app_config_dir = app
+                .path()
+                .app_config_dir()
+                .expect("No app config dir found");
+            let _ = std::fs::create_dir_all(&app_config_dir);
+            let db_path = app_config_dir.join("clipboard.db");
+            let db_url = format!("sqlite:{}", db_path.to_string_lossy());
+
+            let db = tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    sqlx::sqlite::SqlitePool::connect(&db_url)
+                        .await
+                        .expect("Failed to connect to SQLite")
+                })
+            });
+
+            // Run migrations manually
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    for migration in get_migrations() {
+                        sqlx::query(migration.sql)
+                            .execute(&db)
+                            .await
+                            .expect("Failed to run migration");
+                    }
+                })
+            });
+
+            app.manage(db.clone());
+
+            // Register clipboard monitor with polling
             let monitor = services::clipboard_monitor::ClipboardMonitor::new();
             app.manage(monitor.clone());
-
-            let app_handle = app.handle().clone();
-            let monitor_clone = monitor.clone();
-            use tauri_plugin_clipboard_manager::ClipboardContent;
-            tauri_plugin_clipboard_manager::ClipboardManagerExt::clipboard_manager(&app_handle)
-                .watch(move |content: ClipboardContent| {
-                    let app_handle = app_handle.clone();
-                    let monitor = monitor_clone.clone();
-                    tokio::spawn(async move {
-                        match content {
-                            ClipboardContent::Text(text) => {
-                                let item_type = if text.starts_with("http://") || text.starts_with("https://") {
-                                    1
-                                } else {
-                                    0
-                                };
-                                monitor.handle_clipboard_change(app_handle, text, item_type, None).await;
-                            }
-                            ClipboardContent::Image { bytes, .. } => {
-                                let hash = crate::utils::hash::compute_hash_bytes(&bytes);
-                                let images_dir = app_handle.path().app_data_dir()
-                                    .unwrap_or_default()
-                                    .join("images");
-                                let _ = std::fs::create_dir_all(&images_dir);
-                                let file_path = images_dir.join(format!("{}.png", hash));
-                                let _ = std::fs::write(&file_path, &bytes);
-                                monitor.handle_clipboard_change(
-                                    app_handle,
-                                    "[图片]".to_string(),
-                                    2,
-                                    Some(file_path.to_string_lossy().to_string()),
-                                ).await;
-                            }
-                            ClipboardContent::Html(html) => {
-                                monitor.handle_clipboard_change(app_handle, html, 0, None).await;
-                            }
-                            ClipboardContent::Rtf(rtf) => {
-                                monitor.handle_clipboard_change(app_handle, rtf, 0, None).await;
-                            }
-                        }
-                    });
-                })
-                .expect("Failed to watch clipboard");
+            services::clipboard_monitor::ClipboardMonitor::start_polling(
+                app.handle().clone(),
+                db,
+                monitor,
+            );
 
             // Register global hotkey (Ctrl+Shift+V)
-            let app_handle = app.handle().clone();
-            use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, Modifiers, Code, ShortcutState};
+            use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
             let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyV);
-            app_handle.global_shortcut().register(
-                shortcut,
-                move |_app_handle, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        if let Some(window) = _app_handle.get_webview_window("main") {
-                            if !window.is_visible().unwrap_or(false) {
-                                let _ = window.show();
-                            }
-                            let _ = window.set_focus();
-                        }
-                    }
-                },
-            )?;
+            app.global_shortcut().register(shortcut)?;
 
             Ok(())
         })
