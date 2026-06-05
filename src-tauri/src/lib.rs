@@ -81,6 +81,16 @@ pub fn run() {
             let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyV);
             app.global_shortcut().register(shortcut)?;
 
+            // 启动定时清理任务（每小时）
+            let app_handle_cleanup = app.handle().clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+                loop {
+                    interval.tick().await;
+                    cleanup_expired_items(&app_handle_cleanup).await;
+                }
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -95,6 +105,37 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+async fn cleanup_expired_items(app_handle: &tauri::AppHandle) {
+    use tauri::Manager;
+    let settings = services::settings_service::load_settings(app_handle);
+
+    // Get the sqlx pool from state
+    let pool = match app_handle.try_state::<sqlx::SqlitePool>() {
+        Some(pool) => pool.inner().clone(),
+        None => return,
+    };
+
+    // 删除过期记录（retention_days > 0 时）
+    if settings.retention_days > 0 {
+        let _ = sqlx::query(
+            "DELETE FROM items WHERE is_favorite = 0 AND last_used_at < datetime('now', '-' || ? || ' days')"
+        )
+        .bind(settings.retention_days)
+        .execute(&pool)
+        .await;
+    }
+
+    // 删除超量记录（max_item_count > 0 时，保留最新的）
+    if settings.max_item_count > 0 {
+        let _ = sqlx::query(
+            "DELETE FROM items WHERE id NOT IN (SELECT id FROM items ORDER BY last_used_at DESC LIMIT ?) AND is_favorite = 0"
+        )
+        .bind(settings.max_item_count)
+        .execute(&pool)
+        .await;
+    }
 }
 
 fn get_migrations() -> Vec<tauri_plugin_sql::Migration> {
