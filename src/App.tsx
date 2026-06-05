@@ -1,4 +1,5 @@
 import { ThemeProvider } from './contexts/ThemeContext';
+import { SearchBar } from './components/SearchBar';
 import { ClipboardList } from './components/ClipboardList';
 import { useClipboardListener } from './hooks/useClipboardListener';
 import { useDatabase } from './hooks/useDatabase';
@@ -14,6 +15,7 @@ function AppContent() {
           📋 剪贴板管理器
         </h1>
       </header>
+      <SearchBar />
       <ClipboardList />
     </div>
   );
