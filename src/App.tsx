@@ -1,50 +1,29 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { ThemeProvider } from './contexts/ThemeContext';
+import { ClipboardList } from './components/ClipboardList';
+import { useClipboardListener } from './hooks/useClipboardListener';
+import { useDatabase } from './hooks/useDatabase';
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+function AppContent() {
+  useDatabase();
+  useClipboardListener();
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="flex flex-col h-screen bg-white dark:bg-gray-900">
+      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          📋 剪贴板管理器
+        </h1>
+      </header>
+      <ClipboardList />
+    </div>
+  );
+}
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 
