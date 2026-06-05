@@ -43,7 +43,10 @@ pub fn run() {
                 .expect("No app config dir found");
             let _ = std::fs::create_dir_all(&app_config_dir);
             let db_path = app_config_dir.join("clipboard.db");
-            let db_url = format!("sqlite:{}", db_path.to_string_lossy());
+            // Use sqlite:// prefix with forward slashes for cross-platform compatibility
+            let db_url = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
+            eprintln!("DB path: {:?}", db_path);
+            eprintln!("DB URL: {}", db_url);
 
             let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
             let db = rt.block_on(async {
