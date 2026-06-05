@@ -25,7 +25,7 @@ pub async fn paste_item(app_handle: tauri::AppHandle, id: i64) -> Result<(), Str
     )
     .await;
 
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
     monitor.set_suppress(false).await;
 

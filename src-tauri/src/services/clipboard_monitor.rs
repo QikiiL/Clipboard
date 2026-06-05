@@ -1,4 +1,4 @@
-use crate::utils::hash::compute_hash;
+use crate::utils::hash::{compute_hash, compute_hash_bytes};
 use arboard::Clipboard as ArboardClipboard;
 use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
@@ -57,7 +57,7 @@ impl ClipboardMonitor {
                         // Try image first
                         if let Ok(img) = cb.get_image() {
                             let bytes = img.bytes.to_vec();
-                            let hash = compute_hash(&format!("img:{:?}", &bytes[..std::cmp::min(64, bytes.len())]));
+                            let hash = compute_hash_bytes(&bytes);
                             return Some(("[图片]".to_string(), 2, Some(hash)));
                         }
                         // Try text

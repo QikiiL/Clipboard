@@ -31,7 +31,7 @@ export function useClipboardListener() {
       sql += ' WHERE ' + conditions.join(' AND ');
     }
 
-    sql += ' ORDER BY last_used_at DESC';
+    sql += ' ORDER BY last_used_at DESC LIMIT 500';
     const items = await queryItems(sql, params);
     setItems(items as ClipboardItem[]);
   };
