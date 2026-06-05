@@ -114,11 +114,17 @@ impl ClipboardMonitor {
                             .app_data_dir()
                             .unwrap_or_default()
                             .join("images");
-                        let _ = std::fs::create_dir_all(&images_dir);
+                        if let Err(e) = std::fs::create_dir_all(&images_dir) {
+                            eprintln!("Failed to create images directory: {}", e);
+                        }
                         let file_name = format!("{}.png", &hash[..16]);
                         let path = images_dir.join(&file_name);
-                        let _ = std::fs::write(&path, &bytes);
-                        Some(path.to_string_lossy().to_string())
+                        if std::fs::write(&path, &bytes).is_ok() {
+                            Some(path.to_string_lossy().to_string())
+                        } else {
+                            eprintln!("Failed to save image to {:?}", path);
+                            None
+                        }
                     } else {
                         None
                     }

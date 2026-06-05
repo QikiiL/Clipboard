@@ -1,6 +1,11 @@
 use tauri::Manager;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
+/// The default shortcut registered at startup (Ctrl+Shift+V)
+fn default_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyV)
+}
+
 #[tauri::command]
 pub fn show_window(app_handle: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app_handle.get_webview_window("main") {
@@ -18,10 +23,8 @@ pub fn register_hotkey(
     modifier: String,
     key: String,
 ) -> Result<(), String> {
-    app_handle
-        .global_shortcut()
-        .unregister_all()
-        .map_err(|e| e.to_string())?;
+    // Unregister only the default shortcut, not all shortcuts
+    let _ = app_handle.global_shortcut().unregister(default_shortcut());
 
     let mut mods = Modifiers::empty();
     if modifier.contains("Ctrl") {

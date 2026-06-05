@@ -9,6 +9,7 @@ interface ClipboardStore {
   searchQuery: string;
   showFavorites: boolean;
   isLoading: boolean;
+  isPaused: boolean;
 
   setItems: (items: ClipboardItem[]) => void;
   addItem: (item: ClipboardItem) => void;
@@ -19,6 +20,7 @@ interface ClipboardStore {
   setSearchQuery: (query: string) => void;
   setShowFavorites: (show: boolean) => void;
   setLoading: (loading: boolean) => void;
+  setPaused: (paused: boolean) => void;
 }
 
 export const useClipboardStore = create<ClipboardStore>((set) => ({
@@ -28,6 +30,7 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   searchQuery: '',
   showFavorites: false,
   isLoading: false,
+  isPaused: false,
 
   setItems: (items) => set({ items }),
   addItem: (item) => set((state) => ({ items: [item, ...state.items] })),
@@ -42,4 +45,5 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setShowFavorites: (showFavorites) => set({ showFavorites }),
   setLoading: (isLoading) => set({ isLoading }),
+  setPaused: (isPaused) => set({ isPaused }),
 }));

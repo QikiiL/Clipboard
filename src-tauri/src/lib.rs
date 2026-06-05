@@ -128,22 +128,28 @@ async fn cleanup_expired_items(app_handle: &tauri::AppHandle) {
 
     // 删除过期记录（retention_days > 0 时）
     if settings.retention_days > 0 {
-        let _ = sqlx::query(
+        if let Err(e) = sqlx::query(
             "DELETE FROM items WHERE is_favorite = 0 AND last_used_at < datetime('now', '-' || ? || ' days')"
         )
         .bind(settings.retention_days)
         .execute(&pool)
-        .await;
+        .await
+        {
+            eprintln!("Cleanup error (expired items): {}", e);
+        }
     }
 
     // 删除超量记录（max_item_count > 0 时，保留最新的）
     if settings.max_item_count > 0 {
-        let _ = sqlx::query(
+        if let Err(e) = sqlx::query(
             "DELETE FROM items WHERE id NOT IN (SELECT id FROM items ORDER BY last_used_at DESC LIMIT ?) AND is_favorite = 0"
         )
         .bind(settings.max_item_count)
         .execute(&pool)
-        .await;
+        .await
+        {
+            eprintln!("Cleanup error (max items): {}", e);
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { queryItems, escapeLike } from '../lib/db';
+import { queryItems } from '../lib/db';
+import { buildItemQuery } from '../lib/queryBuilder';
 import { useClipboardStore } from '../stores/clipboardStore';
 import type { ClipboardItem } from '../types/clipboard';
 import type { ClipboardGroup } from '../types/group';
@@ -12,29 +13,7 @@ export function useDatabase() {
     const id = ++requestId.current;
     setLoading(true);
     try {
-      let sql = 'SELECT * FROM items';
-      const params: unknown[] = [];
-      const conditions: string[] = [];
-
-      if (searchQuery) {
-        conditions.push('(content LIKE ? OR preview LIKE ?)');
-        params.push(`%${escapeLike(searchQuery)}%`, `%${escapeLike(searchQuery)}%`);
-      }
-
-      if (groupId !== undefined && groupId !== null) {
-        conditions.push('group_id = ?');
-        params.push(groupId);
-      }
-
-      if (favoritesOnly) {
-        conditions.push('is_favorite = 1');
-      }
-
-      if (conditions.length > 0) {
-        sql += ' WHERE ' + conditions.join(' AND ');
-      }
-
-      sql += ' ORDER BY last_used_at DESC LIMIT 500';
+      const { sql, params } = buildItemQuery({ searchQuery, groupId, favoritesOnly });
       const items = await queryItems(sql, params);
       if (id === requestId.current) {
         setItems(items as ClipboardItem[]);

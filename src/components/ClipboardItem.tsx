@@ -55,7 +55,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
           )}
         </div>
       </div>
-      <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.id); }}
           className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
