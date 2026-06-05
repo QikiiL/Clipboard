@@ -45,7 +45,8 @@ pub fn run() {
             let db_path = app_config_dir.join("clipboard.db");
             let db_url = format!("sqlite:{}", db_path.to_string_lossy());
 
-            let db = tauri::async_runtime::block_on(async {
+            let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+            let db = rt.block_on(async {
                 let pool = sqlx::sqlite::SqlitePool::connect(&db_url)
                     .await
                     .expect("Failed to connect to SQLite");
@@ -62,17 +63,15 @@ pub fn run() {
                     .await
                     .expect("Failed to set busy timeout");
 
-                pool
-            });
-
-            // Run migrations manually
-            tauri::async_runtime::block_on(async {
+                // Run migrations manually
                 for migration in get_migrations() {
                     sqlx::query(migration.sql)
-                        .execute(&db)
+                        .execute(&pool)
                         .await
                         .expect("Failed to run migration");
                 }
+
+                pool
             });
 
             app.manage(db.clone());
