@@ -1,7 +1,7 @@
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager,
+    Emitter, Manager,
 };
 
 pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
@@ -24,7 +24,7 @@ pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
             "pause" => {
                 let monitor = app.state::<crate::services::clipboard_monitor::ClipboardMonitor>();
-                let app_handle = app.clone();
+                let app_handle = app.app_handle().clone();
                 tokio::spawn(async move {
                     monitor.toggle_paused().await;
                     let is_paused = monitor.is_paused().await;
