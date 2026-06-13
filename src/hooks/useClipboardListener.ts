@@ -40,9 +40,14 @@ export function useClipboardListener() {
       reloadItems();
     });
 
+    const unlistenPause = listen<boolean>('monitoring-paused', (event) => {
+      useClipboardStore.getState().setPaused(event.payload);
+    });
+
     return () => {
       unlistenClipboard.then((fn) => fn());
       unlistenDelete.then((fn) => fn());
+      unlistenPause.then((fn) => fn());
     };
   }, []);
 }

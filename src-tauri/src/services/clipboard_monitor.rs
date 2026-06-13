@@ -5,6 +5,13 @@ use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tokio::sync::Mutex;
 
+fn is_file_path(s: &str) -> bool {
+    // Check for Windows drive letter (C:\...) or Unix path (/...)
+    (s.len() >= 3 && s.as_bytes()[1] == b':' && (s.as_bytes()[2] == b'\\' || s.as_bytes()[2] == b'/'))
+        || s.starts_with('/')
+        || s.contains('\\')
+}
+
 pub struct ClipboardMonitor {
     suppress: Arc<Mutex<bool>>,
     paused: Arc<Mutex<bool>>,
@@ -53,7 +60,13 @@ impl ClipboardMonitor {
                 }
                 if let Ok(text) = cb.get_text() {
                     if !text.is_empty() {
-                        let item_type = if text.starts_with("http://") || text.starts_with("https://") { 1 } else { 0 };
+                        let item_type = if text.starts_with("http://") || text.starts_with("https://") {
+                            1 // Link
+                        } else if is_file_path(&text) {
+                            3 // File
+                        } else {
+                            0 // Text
+                        };
                         return Some((text, item_type, None, None));
                     }
                 }
@@ -138,14 +151,16 @@ impl ClipboardMonitor {
                             let hash = compute_hash_bytes(&bytes);
                             return Some(("[图片]".to_string(), 2, Some(hash), Some(bytes)));
                         }
-                        // Try text
+                        // Try text / file path
                         if let Ok(text) = cb.get_text() {
                             if !text.is_empty() {
                                 let item_type =
                                     if text.starts_with("http://") || text.starts_with("https://") {
-                                        1
+                                        1 // Link
+                                    } else if is_file_path(&text) {
+                                        3 // File
                                     } else {
-                                        0
+                                        0 // Text
                                     };
                                 return Some((text, item_type, None, None));
                             }
