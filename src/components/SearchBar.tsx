@@ -12,9 +12,7 @@ export function SearchBar() {
 
   useEffect(() => {
     setSearchQuery(debouncedQuery);
-    if (debouncedQuery) {
-      loadItems(debouncedQuery);
-    }
+    loadItems(debouncedQuery || undefined);
   }, [debouncedQuery]);
 
   useEffect(() => {

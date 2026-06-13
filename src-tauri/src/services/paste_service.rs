@@ -26,6 +26,26 @@ pub fn copy_and_paste_text(text: &str) -> Result<(), String> {
     simulate_paste()
 }
 
+/// 将图片写入剪切板并粘贴
+pub fn copy_and_paste_image(file_path: &str) -> Result<(), String> {
+    let img = image::open(file_path).map_err(|e| format!("Failed to decode image: {}", e))?;
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let img_data = arboard::ImageData {
+        width: width as usize,
+        height: height as usize,
+        bytes: std::borrow::Cow::Owned(rgba.into_raw()),
+    };
+    arboard::Clipboard::new()
+        .map_err(|e| e.to_string())?
+        .set_image(img_data)
+        .map_err(|e| format!("Failed to set image on clipboard: {}", e))?;
+
+    thread::sleep(Duration::from_millis(50));
+
+    simulate_paste()
+}
+
 /// 粘贴指定内容
 pub async fn paste_content(content: &str, item_type: i32, file_path: Option<&str>) -> Result<(), String> {
     let content = content.to_string();
@@ -35,7 +55,7 @@ pub async fn paste_content(content: &str, item_type: i32, file_path: Option<&str
             0 | 1 => copy_and_paste_text(&content),
             2 => {
                 let path = file_path.as_deref().unwrap_or(&content);
-                copy_and_paste_text(path)
+                copy_and_paste_image(path)
             }
             _ => copy_and_paste_text(&content),
         }

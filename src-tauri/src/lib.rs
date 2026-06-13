@@ -3,8 +3,32 @@ mod models;
 mod services;
 mod utils;
 
+/// Compute the app config dir path, matching Tauri's internal logic.
+fn compute_app_config_dir() -> std::path::PathBuf {
+    let app_identifier = "com.lyz.clipboard-manager-tauri";
+    let config_dir = if cfg!(target_os = "windows") {
+        std::env::var("APPDATA").expect("APPDATA not set")
+    } else if cfg!(target_os = "macos") {
+        let home = std::env::var("HOME").expect("HOME not set");
+        format!("{}/Library/Application Support", home)
+    } else {
+        let home = std::env::var("HOME").expect("HOME not set");
+        match std::env::var("XDG_CONFIG_HOME") {
+            Ok(path) => path,
+            Err(_) => format!("{}/.config", home),
+        }
+    };
+    std::path::PathBuf::from(config_dir).join(app_identifier)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Compute the DB path before building the app so plugin-sql uses the same absolute path
+    let app_config_dir = compute_app_config_dir();
+    let _ = std::fs::create_dir_all(&app_config_dir);
+    let db_path = app_config_dir.join("clipboard.db");
+    let db_url_for_plugin = format!("sqlite:{}", db_path.to_string_lossy().replace('\\', "/"));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -28,24 +52,16 @@ pub fn run() {
         ))
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:clipboard.db", get_migrations())
+                .add_migrations(&db_url_for_plugin, get_migrations())
                 .build(),
         )
-        .setup(|app| {
+        .setup(move |app| {
             use tauri::Manager;
 
             services::tray_service::create_tray(app)?;
 
-            // Create our own sqlx pool for direct DB access
-            let app_config_dir = app
-                .path()
-                .app_config_dir()
-                .expect("No app config dir found");
-            let _ = std::fs::create_dir_all(&app_config_dir);
-            let db_path = app_config_dir.join("clipboard.db");
-            // Use sqlite: prefix with forward slashes for Windows compatibility
-            let db_path_str = db_path.to_string_lossy().replace('\\', "/");
-            let db_url = format!("sqlite:{}", db_path_str);
+            // Use the pre-computed db_path for the sqlx pool (same path as plugin-sql)
+            let db_url = db_url_for_plugin.clone();
 
             let db = tauri::async_runtime::block_on(async {
                 let pool = sqlx::sqlite::SqlitePool::connect(&db_url)
@@ -118,6 +134,7 @@ pub fn run() {
             commands::settings::load_settings,
             commands::window::show_window,
             commands::window::register_hotkey,
+            commands::db_path::get_db_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
