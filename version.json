@@ -1,6 +1,6 @@
 {
-  "version": "0.1.4",
-  "notes": "升级安装流程优化:应用运行中可直接覆盖安装升级,无需手动退出",
+  "version": "0.1.5",
+  "notes": "修复升级安装时无法自动关闭正在运行的应用的问题(应用以管理员运行时普通权限无法结束,现在会提权完成关闭)",
   "github": "https://github.com/QikiiL/Clipboard/releases",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybcgdve",
   "lanzou_password": "ec4y"
