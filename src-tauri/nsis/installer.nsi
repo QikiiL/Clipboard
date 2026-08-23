@@ -356,7 +356,10 @@ Function PageLeaveReinstall
       Sleep 500
       ${If} $0 <> 0
       ${AndIf} $0 <> 128
-        nsExec::Exec 'powershell -NoProfile -WindowStyle Hidden -Command "Start-Process taskkill -ArgumentList $\"/F /T /IM clipboard-manager-tauri.exe$\" -Verb RunAs -Wait"'
+        ; 提权重杀(弹一次 UAC)。注意:不能用嵌套引号——NSIS 字符串里的
+        ; 内层双引号会破坏 PowerShell 命令解析导致静默失败,故用逗号
+        ; 分隔参数(Start-Process 数组形式),全程零嵌套引号
+        nsExec::Exec '$SYSDIR\WindowsPowerShell\v1.0\powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process taskkill -ArgumentList /F,/T,/IM,clipboard-manager-tauri.exe -Verb RunAs -Wait"'
         Pop $9
         Sleep 800
         nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq clipboard-manager-tauri.exe"'

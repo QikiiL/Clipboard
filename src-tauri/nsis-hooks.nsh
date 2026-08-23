@@ -18,7 +18,8 @@
     Sleep 500
     ${If} $0 <> 0
     ${AndIf} $0 <> 128
-      nsExec::Exec 'powershell -NoProfile -WindowStyle Hidden -Command "Start-Process taskkill -ArgumentList $\"/F /T /IM clipboard-manager-tauri.exe$\" -Verb RunAs -Wait"'
+      ; 提权重杀(弹一次 UAC);逗号分隔参数避免 NSIS 嵌套引号问题
+      nsExec::Exec '$SYSDIR\WindowsPowerShell\v1.0\powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process taskkill -ArgumentList /F,/T,/IM,clipboard-manager-tauri.exe -Verb RunAs -Wait"'
       Pop $9
       Sleep 800
       nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq clipboard-manager-tauri.exe"'
