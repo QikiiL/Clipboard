@@ -2,7 +2,7 @@ use serde::Serialize;
 
 /// 版本信息文件地址:发版时把仓库根目录的 version.json 上传到任意
 /// 可公开访问的静态位置(GitHub raw / Gitee / 对象存储均可),并更新此常量。
-const VERSION_JSON_URL: &str = "https://raw.githubusercontent.com/QikiiL/Clipboard/main/version.json";
+const VERSION_JSON_URL: &str = "https://raw.githubusercontent.com/QikiiL/Clipboard/master/version.json";
 
 /// version.json 的结构:版本号 + 更新说明 + 两个手动下载页地址 + 蓝奏云密码
 #[derive(serde::Deserialize, Clone)]
