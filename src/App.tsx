@@ -24,7 +24,7 @@ import { UpdateDialog, type UpdateInfo } from './components/UpdateDialog';
 function AppContent() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
-  const [pinned, setPinned] = useState(false);
+  const [pinned, setPinned] = useState(true);
   const [maximized, setMaximized] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const { loadItems } = useDatabase();
@@ -67,7 +67,7 @@ function AppContent() {
 
   useEffect(() => {
     invoke<{ pinned?: boolean }>('load_settings')
-      .then((s) => setPinned(s.pinned ?? false))
+      .then((s) => setPinned(s.pinned ?? true))
       .catch(console.error);
   }, []);
 

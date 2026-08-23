@@ -27,8 +27,14 @@ pub struct AppSettings {
     pub close_behavior: CloseBehavior,
     #[serde(default)]
     pub win_v_integration: bool,
-    #[serde(default)]
+    #[serde(default = "default_pinned")]
     pub pinned: bool,
+}
+
+/// 窗口默认置顶;serde 的字段级 default 若不指定函数,bool 恒为 false,
+/// 老配置文件缺 pinned 字段时会退回 false,故显式指定
+fn default_pinned() -> bool {
+    true
 }
 
 impl Default for AppSettings {
@@ -42,7 +48,7 @@ impl Default for AppSettings {
             paused: false,
             close_behavior: CloseBehavior::default(),
             win_v_integration: false,
-            pinned: false,
+            pinned: true,
         }
     }
 }

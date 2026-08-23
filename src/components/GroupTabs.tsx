@@ -4,6 +4,7 @@ import { useClipboardStore } from '../stores/clipboardStore';
 import { useDatabase } from '../hooks/useDatabase';
 import type { ClipboardGroup } from '../types/group';
 import { PlusIcon, StarIcon } from './icons';
+import { PromptDialog, ConfirmDialog } from './Dialogs';
 
 const tabBase =
   'flex-shrink-0 flex items-center gap-1.5 px-[13px] py-[5.5px] text-[12.5px] rounded-full transition-[background-color,color,box-shadow] duration-150';
@@ -19,6 +20,9 @@ export function GroupTabs() {
   const searchQuery = useClipboardStore((s) => s.searchQuery);
   const { loadItems, loadGroups } = useDatabase();
   const [menu, setMenu] = useState<{ group: ClipboardGroup; x: number; y: number } | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<ClipboardGroup | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ClipboardGroup | null>(null);
 
   const handleSelectGroup = (group: typeof selectedGroup) => {
     setShowFavorites(false);
@@ -38,106 +42,124 @@ export function GroupTabs() {
     loadItems(searchQuery || undefined, null, false);
   };
 
-  const handleCreate = async () => {
-    const name = window.prompt('新分组名称:');
-    if (!name || !name.trim()) return;
-    try {
-      await invoke('create_group', { name: name.trim() });
-      await loadGroups();
-    } catch (err) {
-      console.error('Create group failed:', err);
-      alert(String(err));
-    }
+  // 以下三个 handler 失败时直接 throw,由对话框内联展示错误
+  const handleCreate = async (name: string) => {
+    await invoke('create_group', { name });
+    await loadGroups();
+    setCreateOpen(false);
   };
 
-  const handleRename = async (group: ClipboardGroup) => {
-    const name = window.prompt('重命名分组', group.name);
-    if (!name || !name.trim() || name.trim() === group.name) return;
-    try {
-      await invoke('update_group', { id: group.id, name: name.trim(), icon: group.icon });
-      await loadGroups();
-      // 同步选中分组的最新名称
-      if (useClipboardStore.getState().selectedGroup?.id === group.id) {
-        setSelectedGroup({ ...group, name: name.trim() });
-      }
-    } catch (err) {
-      console.error('Rename group failed:', err);
-      alert(String(err));
+  const handleRename = async (group: ClipboardGroup, name: string) => {
+    await invoke('update_group', { id: group.id, name, icon: group.icon });
+    await loadGroups();
+    // 同步选中分组的最新名称
+    if (useClipboardStore.getState().selectedGroup?.id === group.id) {
+      setSelectedGroup({ ...group, name });
     }
+    setRenameTarget(null);
   };
 
   const handleDelete = async (group: ClipboardGroup) => {
-    if (!window.confirm(`删除分组 "${group.name}"?该分组下的条目将变为未分组。`)) return;
-    try {
-      await invoke('delete_group', { id: group.id });
-      await loadGroups();
-      if (useClipboardStore.getState().selectedGroup?.id === group.id) {
-        setSelectedGroup(null);
-        loadItems(searchQuery || undefined, null, false);
-      }
-    } catch (err) {
-      console.error('Delete group failed:', err);
-      alert(String(err));
+    await invoke('delete_group', { id: group.id });
+    await loadGroups();
+    if (useClipboardStore.getState().selectedGroup?.id === group.id) {
+      setSelectedGroup(null);
+      loadItems(searchQuery || undefined, null, false);
     }
+    setDeleteTarget(null);
   };
 
   return (
-    <div className="flex items-center gap-[7px] px-4 pt-1 pb-3 overflow-x-auto">
-      <button
-        onClick={handleShowAll}
-        className={!showFavorites && selectedGroup === null ? tabActive : tabIdle}
-      >
-        全部
-      </button>
-      <button
-        onClick={handleShowFavorites}
-        className={showFavorites ? tabActive : tabIdle}
-      >
-        <span className="text-star"><StarIcon size={13} /></span>
-        收藏
-      </button>
-      {groups.map((group) => (
+    <>
+      <div className="flex items-center gap-[7px] px-4 pt-1 pb-3 overflow-x-auto">
         <button
-          key={group.id}
-          onClick={() => handleSelectGroup(group)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setMenu({ group, x: e.clientX, y: e.clientY });
-          }}
-          className={selectedGroup?.id === group.id ? tabActive : tabIdle}
+          onClick={handleShowAll}
+          className={!showFavorites && selectedGroup === null ? tabActive : tabIdle}
         >
-          {group.icon} {group.name}
+          全部
         </button>
-      ))}
-      <button
-        onClick={handleCreate}
-        title="新建分组"
-        className="flex-shrink-0 flex items-center justify-center w-[27px] h-[27px] rounded-full text-faint hover:bg-hairline hover:text-muted transition-colors"
-      >
-        <PlusIcon size={14} />
-      </button>
-      {menu && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
-          <div
-            className="fixed z-50 min-w-[120px] bg-surface rounded-lg shadow-dialog border border-hairline py-1"
-            style={{ left: menu.x, top: menu.y }}
+        <button
+          onClick={handleShowFavorites}
+          className={showFavorites ? tabActive : tabIdle}
+        >
+          <span className="text-star"><StarIcon size={13} /></span>
+          收藏
+        </button>
+        {groups.map((group) => (
+          <button
+            key={group.id}
+            onClick={() => handleSelectGroup(group)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenu({ group, x: e.clientX, y: e.clientY });
+            }}
+            className={selectedGroup?.id === group.id ? tabActive : tabIdle}
           >
-            <button
-              onClick={() => { handleRename(menu.group); setMenu(null); }}
-              className="w-full text-left px-3 py-1.5 text-[13px] text-ink hover:bg-app"
+            {group.icon} {group.name}
+          </button>
+        ))}
+        <button
+          onClick={() => setCreateOpen(true)}
+          title="新建分组"
+          className="flex-shrink-0 flex items-center justify-center w-[27px] h-[27px] rounded-full text-faint hover:bg-hairline hover:text-muted transition-colors"
+        >
+          <PlusIcon size={14} />
+        </button>
+        {menu && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
+            <div
+              className="fixed z-50 min-w-[120px] bg-surface rounded-lg shadow-dialog border border-hairline py-1"
+              style={{ left: menu.x, top: menu.y }}
             >
-              重命名
-            </button>
-            <button
-              onClick={() => { handleDelete(menu.group); setMenu(null); }}
-              className="w-full text-left px-3 py-1.5 text-[13px] text-danger hover:bg-app"
-            >
-              删除分组
-            </button>
-          </div>
-        </>
+              <button
+                onClick={() => { setRenameTarget(menu.group); setMenu(null); }}
+                className="w-full text-left px-3 py-1.5 text-[13px] text-ink hover:bg-app"
+              >
+                重命名
+              </button>
+              <button
+                onClick={() => { setDeleteTarget(menu.group); setMenu(null); }}
+                className="w-full text-left px-3 py-1.5 text-[13px] text-danger hover:bg-app"
+              >
+                删除分组
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      {createOpen && (
+        <PromptDialog
+          title="新建分组"
+          label="分组名称:"
+          placeholder="输入分组名称"
+          onConfirm={handleCreate}
+          onClose={() => setCreateOpen(false)}
+        />
       )}
-    </div>
+      {renameTarget && (
+        <PromptDialog
+          title="重命名分组"
+          label="分组名称:"
+          initialValue={renameTarget.name}
+          onConfirm={async (name) => {
+            if (name === renameTarget.name) {
+              setRenameTarget(null);
+              return;
+            }
+            await handleRename(renameTarget, name);
+          }}
+          onClose={() => setRenameTarget(null)}
+        />
+      )}
+      {deleteTarget && (
+        <ConfirmDialog
+          title="删除分组"
+          message={`删除分组 "${deleteTarget.name}"?\n该分组下的条目将变为未分组。`}
+          onConfirm={() => handleDelete(deleteTarget)}
+          onClose={() => setDeleteTarget(null)}
+        />
+      )}
+    </>
   );
 }

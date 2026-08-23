@@ -18,12 +18,22 @@ interface StorageInfo {
   default_dir: string;
 }
 
+// 清除范围选项:days 为 0 表示全部,>0 表示清除 N 天前(含更早)的记录
+const CLEAR_RANGES = [
+  { days: 0, label: '全部' },
+  { days: 90, label: '三个月前' },
+  { days: 30, label: '一个月前' },
+  { days: 7, label: '七天前' },
+  { days: 3, label: '三天前' },
+] as const;
+
 export function SettingsPanel({ isOpen, onClose }: Props) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [recording, setRecording] = useState(false);
   const [winVEnabled, setWinVEnabled] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [clearDays, setClearDays] = useState(0);
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateResult, setUpdateResult] = useState<UpdateInfo | null>(null);
@@ -54,6 +64,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
       setRecording(false);
       recordingRef.current = false;
       setClearConfirmOpen(false);
+      setClearDays(0);
       invoke<StorageInfo>('get_storage_info')
         .then(setStorageInfo)
         .catch(console.error);
@@ -206,14 +217,14 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
     setClearConfirmOpen(false);
     try {
       setClearing(true);
-      await invoke('clear_history');
+      await invoke('clear_history', { days: clearDays });
     } catch (err) {
       console.error('Clear history failed:', err);
       alert('清空失败: ' + err);
     } finally {
       setClearing(false);
     }
-  }, []);
+  }, [clearDays]);
 
   // 更改/恢复存储位置:后端选目录+校验+写指针后重启,冷启动完成数据搬运
   const handleChangeStorage = async () => {
@@ -454,7 +465,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
           <div className="flex items-center justify-between">
             <div>
               <span className="text-[12.5px] font-medium">清空剪贴板历史</span>
-              <p className="text-[11px] text-faint">删除除收藏外的全部记录及其图片文件</p>
+              <p className="text-[11px] text-faint">按时间范围清除未收藏的记录及图片,收藏保留</p>
             </div>
             <button
               onClick={() => setClearConfirmOpen(true)}
@@ -559,8 +570,27 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
               <h3 className="text-sm font-semibold">清空剪贴板历史</h3>
             </div>
             <div className="px-5 py-4">
-              <p className="text-[13px] leading-relaxed text-ink">
-                将删除除收藏外的全部记录及其图片文件,此操作不可恢复。收藏的条目(含图片)会保留。
+              <p className="text-[12px] font-medium mb-2">清除范围</p>
+              <div className="flex gap-[3px] p-[3px] rounded-[10px] bg-app">
+                {CLEAR_RANGES.map((opt) => (
+                  <button
+                    key={opt.days}
+                    onClick={() => setClearDays(opt.days)}
+                    className={`flex-1 h-[26px] text-[11px] rounded-[7px] transition-[background-color,color,box-shadow] duration-150 ${
+                      clearDays === opt.days
+                        ? 'bg-surface text-accent font-semibold shadow-lift'
+                        : 'text-muted hover:text-faint'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[12.5px] leading-relaxed text-ink mt-3">
+                {clearDays === 0
+                  ? '将删除除收藏外的全部记录及其图片文件。'
+                  : `将删除"${CLEAR_RANGES.find((r) => r.days === clearDays)?.label}"及更早的未收藏记录及其图片文件。`}
+                此操作不可恢复,收藏的条目(含图片)会保留。
               </p>
             </div>
             <div className="flex justify-end gap-2 px-5 pt-3 pb-4 border-t border-hairline">

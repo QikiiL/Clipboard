@@ -116,22 +116,41 @@ pub async fn delete_item(app_handle: tauri::AppHandle, id: i64) -> Result<(), St
 }
 
 /// 清空剪贴板历史(保留收藏):删除所有未收藏条目,清理不再被引用的图片文件
-/// (含孤儿文件),并尽力 VACUUM 压缩数据库
+/// (含孤儿文件),并尽力 VACUUM 压缩数据库。
+/// days = None 或 <=0 清除全部;>0 只清除 last_used_at 早于 N 天前的条目
+/// (与保留天数自动清理的时间列保持一致)。
 #[tauri::command]
-pub async fn clear_history(app_handle: tauri::AppHandle) -> Result<(), String> {
+pub async fn clear_history(
+    app_handle: tauri::AppHandle,
+    days: Option<i64>,
+) -> Result<(), String> {
     let db = app_handle.state::<SqlitePool>();
 
-    sqlx::query("DELETE FROM items WHERE is_favorite = 0")
-        .execute(&*db)
-        .await
-        .map_err(|e| e.to_string())?;
+    let result = match days.filter(|d| *d > 0) {
+        Some(days) => {
+            sqlx::query(
+                "DELETE FROM items WHERE is_favorite = 0 \
+                 AND last_used_at < datetime('now', '-' || ? || ' days')",
+            )
+            .bind(days)
+            .execute(&*db)
+            .await
+            .map_err(|e| e.to_string())?
+        }
+        None => sqlx::query("DELETE FROM items WHERE is_favorite = 0")
+            .execute(&*db)
+            .await
+            .map_err(|e| e.to_string())?,
+    };
 
-    // 收藏条目的图片保留,其余(含孤儿文件)清除
-    crate::services::image_cleanup::remove_unreferenced_images(&app_handle, &*db).await;
+    if result.rows_affected() > 0 {
+        // 收藏条目的图片保留,其余(含孤儿文件)清除
+        crate::services::image_cleanup::remove_unreferenced_images(&app_handle, &*db).await;
 
-    // 尽力回收数据库空间;若恰有并发连接占用导致失败,不影响清空结果
-    if let Err(e) = sqlx::query("VACUUM").execute(&*db).await {
-        eprintln!("VACUUM after clear_history failed: {}", e);
+        // 尽力回收数据库空间;若恰有并发连接占用导致失败,不影响清空结果
+        if let Err(e) = sqlx::query("VACUUM").execute(&*db).await {
+            eprintln!("VACUUM after clear_history failed: {}", e);
+        }
     }
 
     let _ = app_handle.emit("clipboard-changed", serde_json::json!({"action": "cleared"}));

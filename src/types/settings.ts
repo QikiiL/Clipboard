@@ -21,5 +21,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   paused: false,
   close_behavior: 'ask',
   win_v_integration: false,
-  pinned: false,
+  pinned: true,
 };
