@@ -38,6 +38,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateResult, setUpdateResult] = useState<UpdateInfo | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [pwdCopied, setPwdCopied] = useState(false);
   // settingsRef 始终持有最新设置,避免回调闭包读到旧值
   const settingsRef = useRef<AppSettings>(DEFAULT_SETTINGS);
   // savedRef 持有最近一次已持久化的值,用于判断数字输入是否真的改了
@@ -268,6 +269,18 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
 
   const openUrl = (url: string) => {
     invoke('open_external_url', { url }).catch(console.error);
+  };
+
+  // 与 UpdateDialog 相同的双保险:点击下载自动复制密码 + 明文展示可手动复制
+  const copyUpdatePassword = async () => {
+    if (!updateResult?.lanzou_password) return;
+    try {
+      await invoke('write_clipboard_text', { text: updateResult.lanzou_password });
+      setPwdCopied(true);
+      setTimeout(() => setPwdCopied(false), 2000);
+    } catch (err) {
+      console.error('Copy password failed:', err);
+    }
   };
 
   const displayShortcut = recording
@@ -507,10 +520,27 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                 {updateResult.notes && (
                   <p className="text-[11px] text-faint mt-1 whitespace-pre-wrap">{updateResult.notes}</p>
                 )}
+                {updateResult.lanzou && updateResult.lanzou_password && (
+                  <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-[8px] bg-app border border-hairline">
+                    <span className="text-[11px] text-faint shrink-0">蓝奏云密码</span>
+                    <span className="text-[13px] font-mono font-medium tracking-widest text-ink select-all truncate">
+                      {updateResult.lanzou_password}
+                    </span>
+                    <button
+                      onClick={copyUpdatePassword}
+                      className="ml-auto shrink-0 h-[22px] px-2.5 text-[11px] rounded-[6px] border border-hairline text-muted hover:bg-hairline transition-colors duration-150"
+                    >
+                      {pwdCopied ? '已复制' : '复制'}
+                    </button>
+                  </div>
+                )}
                 <div className="flex gap-2 mt-2">
                   {updateResult.lanzou && (
                     <button
-                      onClick={() => openUrl(updateResult.lanzou!)}
+                      onClick={() => {
+                        if (updateResult.lanzou_password) void copyUpdatePassword();
+                        openUrl(updateResult.lanzou!);
+                      }}
                       className="h-[28px] px-3 text-[11px] rounded-[8px] border border-hairline text-muted hover:bg-hairline transition-colors duration-150"
                     >
                       蓝奏云下载
