@@ -343,23 +343,22 @@ Function PageLeaveReinstall
     ClearErrors
 
     ; ==== clipboard 项目定制(基于 tauri-v2.11.2 官方模板,升级时同步) ====
-    ; 运行旧版卸载器前先结束正在运行的应用。应用 manifest 为
-    ; requireAdministrator:普通权限 taskkill 只能杀掉非提权的 WebView2
-    ; 子进程(表现为窗口黑屏),提权的主进程杀不掉,文件被锁导致"无法卸载"。
-    ; 注意:nsis_tauri_utils::FindProcessCurrentUser 检测不到提权进程
-    ; (查询进程令牌被拒,误报未运行),必须用 taskkill 退出码判断:
-    ; 0=已结束 128=未运行 其他(如 255)=进程存在但权限不足,需提权重杀
+    ; 运行旧版卸载器前先结束正在运行的应用。要点:
+    ; 1) 应用 manifest 为 requireAdministrator,普通权限 taskkill 杀不掉提权
+    ;    主进程,需用退出码判断:0=已结束 128=未运行 其他(255)=存在但需提权
+    ;    (nsis_tauri_utils::FindProcessCurrentUser 看不到提权进程,不可用)
+    ; 2) 绝不能用 /T 树杀:先杀 WebView2 子进程会把主进程卡成杀不掉的
+    ;    僵尸(实测管理员权限也无法结束),必须先杀主进程,子进程随之退出
+    ; 3) 提权重杀用 UAC(Start-Process -Verb RunAs);参数用逗号分隔,
+    ;    嵌套引号会破坏 NSIS 里的 PowerShell 命令解析导致静默失败
     app_kill_retry:
-      nsExec::ExecToStack 'taskkill /F /T /IM "clipboard-manager-tauri.exe"'
+      nsExec::ExecToStack 'taskkill /F /IM "clipboard-manager-tauri.exe"'
       Pop $0
       Pop $9
       Sleep 500
       ${If} $0 <> 0
       ${AndIf} $0 <> 128
-        ; 提权重杀(弹一次 UAC)。注意:不能用嵌套引号——NSIS 字符串里的
-        ; 内层双引号会破坏 PowerShell 命令解析导致静默失败,故用逗号
-        ; 分隔参数(Start-Process 数组形式),全程零嵌套引号
-        nsExec::Exec '$SYSDIR\WindowsPowerShell\v1.0\powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process taskkill -ArgumentList /F,/T,/IM,clipboard-manager-tauri.exe -Verb RunAs -Wait"'
+        nsExec::Exec '$SYSDIR\WindowsPowerShell\v1.0\powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process taskkill -ArgumentList /F,/IM,clipboard-manager-tauri.exe -Verb RunAs -Wait"'
         Pop $9
         Sleep 800
         nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq clipboard-manager-tauri.exe"'

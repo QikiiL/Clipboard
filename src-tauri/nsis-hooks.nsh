@@ -5,21 +5,22 @@
 
 !define USERDATA_BACKUP "$INSTDIR\..\clipboard-userdata"
 
-; 覆盖安装/卸载前结束正在运行的应用(含 WebView2 子进程)。
-; 应用以管理员运行(manifest requireAdministrator),普通权限 taskkill 杀不掉
-; 提权主进程。用 taskkill 退出码判断:0=已结束 128=未运行
-; 其他(如 255)=进程存在但权限不足,提权重杀(弹一次 UAC)。
-; 注意:不能用 FindProcessCurrentUser 检测——它看不到提权进程(误报未运行)
+; 覆盖安装/卸载前结束正在运行的应用。
+; 应用以管理员运行(manifest requireAdministrator)。要点:
+; 1) 用 taskkill 退出码判断:0=已结束 128=未运行 其他(255)=存在但需提权
+;    (FindProcessCurrentUser 看不到提权进程,不可用)
+; 2) 不用 /T 树杀:先杀 WebView2 子进程会把主进程卡成杀不掉的僵尸,
+;    必须先杀主进程,子进程随之退出
+; 3) 提权重杀经 UAC;参数用逗号分隔避免 NSIS 嵌套引号解析问题
 !macro KILL_RUNNING_APP
   kill_app_retry:
-    nsExec::ExecToStack 'taskkill /F /T /IM "clipboard-manager-tauri.exe"'
+    nsExec::ExecToStack 'taskkill /F /IM "clipboard-manager-tauri.exe"'
     Pop $0
     Pop $9
     Sleep 500
     ${If} $0 <> 0
     ${AndIf} $0 <> 128
-      ; 提权重杀(弹一次 UAC);逗号分隔参数避免 NSIS 嵌套引号问题
-      nsExec::Exec '$SYSDIR\WindowsPowerShell\v1.0\powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process taskkill -ArgumentList /F,/T,/IM,clipboard-manager-tauri.exe -Verb RunAs -Wait"'
+      nsExec::Exec '$SYSDIR\WindowsPowerShell\v1.0\powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process taskkill -ArgumentList /F,/IM,clipboard-manager-tauri.exe -Verb RunAs -Wait"'
       Pop $9
       Sleep 800
       nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq clipboard-manager-tauri.exe"'
