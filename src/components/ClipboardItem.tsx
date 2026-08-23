@@ -11,6 +11,7 @@ import {
   StarIcon,
   StarOutlineIcon,
   FolderIcon,
+  FolderFillIcon,
   TrashIcon,
 } from './icons';
 
@@ -239,7 +240,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
           <span className="text-star mr-2"><StarIcon size={13} /></span>
         )}
         {item.group_id !== null && (
-          <span className="text-accent mr-2"><FolderIcon size={13} /></span>
+          <span className="text-accent mr-2"><FolderFillIcon size={13} /></span>
         )}
         <span className="text-[11px] text-faint tabular-nums">{formatTime(item.last_used_at)}</span>
         <div className="flex items-center pl-2 w-0 overflow-hidden group-hover:w-[90px] group-focus-within:w-[90px] transition-[width] duration-150 ease-out">
@@ -255,14 +256,10 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => { e.stopPropagation(); setGroupMenuOpen((v) => !v); }}
-              className={`flex items-center justify-center w-[26px] h-[26px] rounded-[7px] transition-colors ${
-                item.group_id !== null
-                  ? 'text-accent hover:bg-hairline'
-                  : 'text-faint hover:bg-hairline hover:text-muted'
-              }`}
+              className="flex items-center justify-center w-[26px] h-[26px] rounded-[7px] text-faint hover:bg-hairline hover:text-muted transition-colors"
               title={item.group_id !== null ? '更改分组' : '归入分组'}
             >
-              <FolderIcon size={14} />
+              {item.group_id !== null ? <FolderFillIcon size={14} /> : <FolderIcon size={14} />}
             </button>
             <button
               onMouseDown={(e) => e.preventDefault()}

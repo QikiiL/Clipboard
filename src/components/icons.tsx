@@ -129,6 +129,15 @@ export function FolderIcon(props: IconProps) {
   );
 }
 
+/** 实心文件夹:已归组状态,对应收藏激活后的实心星标 */
+export function FolderFillIcon(props: IconProps) {
+  return (
+    <svg {...svgProps({ stroke: 'none', ...props })} fill="currentColor">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 export function TrashIcon(props: IconProps) {
   return (
     <svg {...svgProps(props)}>
