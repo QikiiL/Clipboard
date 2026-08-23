@@ -33,12 +33,14 @@ export function useClipboardListener(loadItems: (searchQuery?: string, groupId?:
       useClipboardStore.getState().setPaused(event.payload);
     });
 
-    // Subscribe to store changes (searchQuery, selectedGroup, showFavorites)
+    // Subscribe to store changes (searchQuery, selectedGroup, showFavorites, maxItems)
+    // maxItems 纳入比较:设置里改上限、启动时加载设置后都会触发按新上限重查
     const unsubscribeStore = useClipboardStore.subscribe((state, prevState) => {
       if (
         state.searchQuery !== prevState.searchQuery ||
         state.selectedGroup !== prevState.selectedGroup ||
-        state.showFavorites !== prevState.showFavorites
+        state.showFavorites !== prevState.showFavorites ||
+        state.maxItems !== prevState.maxItems
       ) {
         reloadItems().catch(console.error);
       }

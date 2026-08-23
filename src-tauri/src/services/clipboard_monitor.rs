@@ -222,57 +222,9 @@ impl ClipboardMonitor {
     pub fn start_polling(app_handle: tauri::AppHandle, db: SqlitePool, monitor: ClipboardMonitor) {
         let monitor = monitor.clone();
         tauri::async_runtime::spawn(async move {
-            // Initial clipboard capture on startup (skipped while paused)
-            if !*monitor.paused.lock().await {
-                let initial_clipboard = tokio::task::spawn_blocking(read_clipboard_content)
-                    .await
-                    .unwrap_or(None);
-
-                if let Some((content, item_type, image_hash, image_bytes, img_width, img_height)) =
-                    initial_clipboard
-                {
-                    let hash = if let Some(ih) = image_hash {
-                        ih
-                    } else {
-                        compute_hash(&content)
-                    };
-                    let preview: String = content.chars().take(100).collect();
-
-                    let file_path: Option<String> = if item_type == ClipboardType::Image as i32 {
-                        image_bytes.as_deref().and_then(|bytes| {
-                            save_image_to_disk(&app_handle, &hash, bytes, img_width, img_height)
-                        })
-                    } else {
-                        None
-                    };
-
-                    {
-                        let mut last = monitor.last_hash.lock().await;
-                        *last = hash.clone();
-                    }
-
-                    let existing = sqlx::query_scalar::<_, i64>(
-                        "SELECT id FROM items WHERE content_hash = ? LIMIT 1",
-                    )
-                    .bind(&hash)
-                    .fetch_optional(&db)
-                    .await;
-
-                    if existing.ok().flatten().is_none() {
-                        let _ = sqlx::query(
-                            "INSERT INTO items (type, content, content_hash, file_path, preview) VALUES (?, ?, ?, ?, ?)",
-                        )
-                        .bind(item_type)
-                        .bind(&content)
-                        .bind(&hash)
-                        .bind(&file_path)
-                        .bind(&preview)
-                        .execute(&db)
-                        .await;
-                    }
-                }
-            }
-
+            // 启动捕获由下方轮询循环完成:tokio interval 的首次 tick 立即到期,
+            // 与后续读取共用同一套去重/入库/发事件逻辑(独一份,避免双份维护),
+            // 且首次捕获到新条目时也会发事件,前端首屏加载后能及时刷新出来
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
             loop {
                 interval.tick().await;

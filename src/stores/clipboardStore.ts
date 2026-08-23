@@ -14,9 +14,6 @@ interface ClipboardStore {
   maxItems: number;
 
   setItems: (items: ClipboardItem[]) => void;
-  addItem: (item: ClipboardItem) => void;
-  updateItem: (item: ClipboardItem) => void;
-  removeItem: (id: number) => void;
   setGroups: (groups: ClipboardGroup[]) => void;
   setSelectedGroup: (group: ClipboardGroup | null) => void;
   setSearchQuery: (query: string) => void;
@@ -39,13 +36,6 @@ export const useClipboardStore = create<ClipboardStore>((set, get) => ({
   maxItems: 500,
 
   setItems: (items) => set({ items }),
-  addItem: (item) => set((state) => ({ items: [item, ...state.items] })),
-  updateItem: (item) => set((state) => ({
-    items: state.items.map((i) => (i.id === item.id ? item : i)),
-  })),
-  removeItem: (id) => set((state) => ({
-    items: state.items.filter((i) => i.id !== id),
-  })),
   setGroups: (groups) => set({ groups }),
   setSelectedGroup: (group) => set({ selectedGroup: group }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),

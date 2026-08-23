@@ -60,7 +60,8 @@ export function StatusBar() {
     loadSize();
     const timer = setInterval(loadSize, 10000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [totalCount]);
+    // 轮询自身感知变化即可;依赖 totalCount 会在每次条数变化时重建定时器
+  }, []);
 
   return (
     <div className="flex items-center justify-between h-9 px-4 border-t border-hairline text-[11px] text-faint tabular-nums">

@@ -20,8 +20,11 @@ export function SearchBar() {
         inputRef.current?.focus();
       }
       if (e.key === 'Escape') {
-        setInputValue('');
-        inputRef.current?.blur();
+        // 仅在搜索框聚焦时响应,避免对话框打开时按 Esc 关弹窗把搜索词也清掉
+        if (document.activeElement === inputRef.current) {
+          setInputValue('');
+          inputRef.current?.blur();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);

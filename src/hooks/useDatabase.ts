@@ -9,9 +9,11 @@ import type { ClipboardGroup } from '../types/group';
 import type { AppSettings } from '../types/settings';
 
 export function useDatabase() {
-  const { setItems, setGroups, setLoading, incrementRequestId } = useClipboardStore();
-
+  // zustand 的 action 引用稳定,经 getState() 取用即可;
+  // 带解构的订阅会让挂载本 hook 的组件随 store 任意字段(含每次查询自增的
+  // requestId)变化而整体重渲染
   const loadItems = useCallback(async (searchQuery?: string, groupId?: number | null, favoritesOnly?: boolean) => {
+    const { incrementRequestId, setLoading, setItems } = useClipboardStore.getState();
     const id = incrementRequestId();
     setLoading(true);
     try {
@@ -30,12 +32,12 @@ export function useDatabase() {
         setLoading(false);
       }
     }
-  }, [setItems, setLoading, incrementRequestId]);
+  }, []);
 
   const loadGroups = useCallback(async () => {
     const groups = await queryItems('SELECT * FROM groups ORDER BY sort_order');
-    setGroups(groups as ClipboardGroup[]);
-  }, [setGroups]);
+    useClipboardStore.getState().setGroups(groups as ClipboardGroup[]);
+  }, []);
 
   useEffect(() => {
     (async () => {
