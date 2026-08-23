@@ -1,6 +1,6 @@
 {
-  "version": "0.1.0",
-  "notes": "首发版本。",
+  "version": "0.1.1",
+  "notes": "修复启动时长时间卡死的问题;窗口默认置顶;新建分组改为美观的应用内对话框;条目归组后按钮高亮显示;清空历史支持按时间范围(三个月前/一个月前/七天前/三天前)。",
   "github": "https://github.com/QikiiL/Clipboard/releases",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybcgdve",
   "lanzou_password": "ec4y"

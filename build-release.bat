@@ -17,7 +17,13 @@ if errorlevel 1 (
 )
 
 echo.
-copy /Y src-tauri\target\release\bundle\nsis\clipboard_0.1.0_x64-setup.exe clipboard-setup.exe >nul
+:: 按修改时间取最新的安装包,避免版本号升级后此处漏改
+for /f "delims=" %%f in ('dir /b /o-d "src-tauri\target\release\bundle\nsis\clipboard_*_x64-setup.exe"') do (
+    copy /Y "src-tauri\target\release\bundle\nsis\%%f" clipboard-setup.exe >nul
+    goto :copied
+)
+echo WARNING: NSIS installer not found
+:copied
 echo === Artifacts ===
 echo Installer: clipboard-setup.exe
 echo Standalone exe: src-tauri\target\release\clipboard-manager-tauri.exe
