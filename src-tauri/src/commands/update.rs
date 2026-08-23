@@ -42,30 +42,37 @@ fn version_tuple(v: &str) -> (u64, u64, u64) {
 }
 
 /// 检查更新:拉取 version.json 并与当前版本比较。
-/// 网络失败直接报错,由前端按“检查失败”展示。
+/// 必须是 async + spawn_blocking:同步命令在主线程执行,
+/// 网络请求(最长 8 秒超时)会把整个窗口卡死;移到阻塞线程池后
+/// 网络再慢也不影响 UI 响应。网络失败直接报错,由前端按"检查失败"展示。
 #[tauri::command]
-pub fn check_update(app: tauri::AppHandle) -> Result<UpdateInfo, String> {
-    let manifest: UpdateManifest = ureq::get(VERSION_JSON_URL)
-        .timeout(std::time::Duration::from_secs(8))
-        .call()
-        .map_err(|e| format!("无法获取版本信息: {}", e))?
-        .into_json()
-        .map_err(|e| format!("解析版本信息失败: {}", e))?;
-
+pub async fn check_update(app: tauri::AppHandle) -> Result<UpdateInfo, String> {
     let current = app
         .config()
         .version
         .clone()
         .unwrap_or_else(|| "0.0.0".to_string());
-    Ok(UpdateInfo {
-        has_update: version_tuple(&manifest.version) > version_tuple(&current),
-        current,
-        latest: manifest.version,
-        notes: manifest.notes,
-        github: manifest.github,
-        lanzou: manifest.lanzou,
-        lanzou_password: manifest.lanzou_password.filter(|p| !p.is_empty()),
+
+    tauri::async_runtime::spawn_blocking(move || -> Result<UpdateInfo, String> {
+        let manifest: UpdateManifest = ureq::get(VERSION_JSON_URL)
+            .timeout(std::time::Duration::from_secs(8))
+            .call()
+            .map_err(|e| format!("无法获取版本信息: {}", e))?
+            .into_json()
+            .map_err(|e| format!("解析版本信息失败: {}", e))?;
+
+        Ok(UpdateInfo {
+            has_update: version_tuple(&manifest.version) > version_tuple(&current),
+            current,
+            latest: manifest.version,
+            notes: manifest.notes,
+            github: manifest.github,
+            lanzou: manifest.lanzou,
+            lanzou_password: manifest.lanzou_password.filter(|p| !p.is_empty()),
+        })
     })
+    .await
+    .map_err(|e| format!("更新检查任务失败: {}", e))?
 }
 
 /// 写入纯文本到系统剪贴板(复制蓝奏云密码用)
