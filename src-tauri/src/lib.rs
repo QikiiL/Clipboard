@@ -352,6 +352,7 @@ async fn cleanup_expired_items(app_handle: &tauri::AppHandle) {
         ));
     }
 
+    let mut deleted: u64 = 0;
     for (where_clause, value) in conditions {
         let file_paths: Vec<Option<String>> =
             match sqlx::query_scalar::<_, Option<String>>(&format!(
@@ -369,17 +370,28 @@ async fn cleanup_expired_items(app_handle: &tauri::AppHandle) {
                 }
             };
 
-        if let Err(e) = sqlx::query(&format!("DELETE FROM items WHERE {}", where_clause))
+        match sqlx::query(&format!("DELETE FROM items WHERE {}", where_clause))
             .bind(value)
             .execute(&pool)
             .await
         {
-            eprintln!("Cleanup error (delete): {}", e);
-            continue;
+            Ok(res) => deleted += res.rows_affected(),
+            Err(e) => {
+                eprintln!("Cleanup error (delete): {}", e);
+                continue;
+            }
         }
 
         for path in file_paths.iter().flatten() {
             services::image_cleanup::remove_image_file(app_handle, path);
+        }
+    }
+
+    // 有实际删除才回收数据库文件空间(与手动清空行为一致);
+    // 并发连接占用导致 VACUUM 失败时只记日志,不影响清理结果
+    if deleted > 0 {
+        if let Err(e) = sqlx::query("VACUUM").execute(&pool).await {
+            eprintln!("VACUUM after cleanup failed: {}", e);
         }
     }
 }
