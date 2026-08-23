@@ -285,7 +285,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
                 item.group_id === null ? 'text-accent font-medium' : 'text-ink'
               }`}
             >
-              未分组
+              {item.group_id === null ? '未分组' : '取消分组'}
             </button>
             {groups.map((g) => (
               <button
