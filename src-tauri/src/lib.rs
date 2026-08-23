@@ -278,11 +278,12 @@ pub fn run() {
             // 主窗口在此程序化创建(tauri.conf.json 不再声明窗口),
             // 与热键唤出时的重建共用同一条路径(几何恢复/置顶恢复/
             // CloseRequested 拦截/WebView2 低内存模式都挂在创建函数里)。
-            // --minimized(开机自启)时保持隐藏,常驻托盘。
+            // --minimized(开机自启)时完全不创建窗口:登录瞬间桌面/WebView2/
+            // 显示器枚举可能未就绪,过早创建易卡死或坐标错乱(表现为托盘/热键
+            // 都唤不出)。首次唤出时桌面已就绪,再走统一的创建路径。
             let start_minimized = std::env::args().any(|arg| arg == "--minimized");
-            utils::window_manager::create_main_window(app.handle(), !start_minimized)?;
-            if start_minimized {
-                utils::webview_control::set_webview_visible(app.handle(), false);
+            if !start_minimized {
+                utils::window_manager::create_main_window(app.handle(), true)?;
             }
 
             Ok(())

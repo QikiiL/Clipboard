@@ -1,11 +1,21 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::models::settings::CloseBehavior;
 use crate::services::settings_service::load_settings;
 
-/// 窗口重建耗时约 0.5~1.5s,期间热键/托盘可能重复触发,用标志防重入
-static CREATING: AtomicBool = AtomicBool::new(false);
+/// 上次窗口创建开始的时间戳(毫秒),0=空闲。不用布尔标志:登录瞬间等
+/// 桌面未就绪的场景下创建可能卡死不返回,布尔会永久封死后续唤出;
+/// 时间戳超时(CREATE_TIMEOUT_MS)后自动放行重试
+static CREATING_AT: AtomicU64 = AtomicU64::new(0);
+const CREATE_TIMEOUT_MS: u64 = 30_000;
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 
 /// 统一的“唤出”入口:窗口存在则显示聚焦,不存在(已被销毁)则后台线程重建。
 /// 热键、托盘、show_window 命令都走这里。
@@ -14,6 +24,7 @@ pub fn show_or_create(app: &AppHandle) {
         if window.is_minimized().unwrap_or(false) {
             let _ = window.unminimize();
         }
+        ensure_on_screen(app, &window);
         let _ = window.show();
         let _ = window.set_focus();
         return;
@@ -21,10 +32,51 @@ pub fn show_or_create(app: &AppHandle) {
     spawn_create(app);
 }
 
+/// 自愈:窗口保存的坐标可能已不在任何显示器上(登录早期枚举不全、
+/// 拔了显示器、改了分辨率),越界时拉回主显示器居中,否则用户会以为
+/// "唤不出窗口"。仅对可见判定,不改变正常位置。
+fn ensure_on_screen(app: &AppHandle, window: &tauri::WebviewWindow) {
+    let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) else {
+        return;
+    };
+    let Ok(monitors) = app.available_monitors() else {
+        return;
+    };
+    if monitors.is_empty() {
+        return;
+    }
+    let on_screen = monitors.iter().any(|m| {
+        let mp = m.position();
+        let ms = m.size();
+        pos.x + size.width as i32 > mp.x
+            && pos.x < mp.x + ms.width as i32
+            && pos.y + size.height as i32 > mp.y
+            && pos.y < mp.y + ms.height as i32
+    });
+    if !on_screen {
+        let Some(primary) = app
+            .primary_monitor()
+            .ok()
+            .flatten()
+            .or_else(|| monitors.first().cloned())
+        else {
+            return;
+        };
+        let mp = primary.position();
+        let ms = primary.size();
+        let x = mp.x + (ms.width as i32 - size.width as i32).max(0) / 2;
+        let y = mp.y + (ms.height as i32 - size.height as i32).max(0) / 2;
+        let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+}
+
 /// 在独立线程中重建窗口:避免占用事件循环线程,
-/// 也避开“从主线程事件回调里同步 build 可能死锁”的问题
+/// 也避开“从主线程事件回调里同步 build 可能死锁”的问题。
+/// 防重入用时间戳:进行中且未超时才跳过,卡死后 30 秒自动解锁重试。
 fn spawn_create(app: &AppHandle) {
-    if CREATING.swap(true, Ordering::SeqCst) {
+    let now = now_ms();
+    let prev = CREATING_AT.swap(now, Ordering::SeqCst);
+    if prev != 0 && now.saturating_sub(prev) < CREATE_TIMEOUT_MS {
         return;
     }
     let app = app.clone();
@@ -32,7 +84,7 @@ fn spawn_create(app: &AppHandle) {
         if let Err(e) = create_main_window(&app, true) {
             eprintln!("Failed to recreate main window: {}", e);
         }
-        CREATING.store(false, Ordering::SeqCst);
+        CREATING_AT.store(0, Ordering::SeqCst);
     });
 }
 
