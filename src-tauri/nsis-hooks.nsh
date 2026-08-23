@@ -5,13 +5,10 @@
 
 !define USERDATA_BACKUP "$INSTDIR\..\clipboard-userdata"
 
-; 覆盖安装/卸载前结束正在运行的应用。
-; 应用以管理员运行(manifest requireAdministrator)。要点:
-; 1) 用 taskkill 退出码判断:0=已结束 128=未运行 其他(255)=存在但需提权
-;    (FindProcessCurrentUser 看不到提权进程,不可用)
-; 2) 不用 /T 树杀:先杀 WebView2 子进程会把主进程卡成杀不掉的僵尸,
-;    必须先杀主进程,子进程随之退出
-; 3) 提权重杀经 UAC;参数用逗号分隔避免 NSIS 嵌套引号解析问题
+; 覆盖安装/卸载前结束正在运行的应用。安装器/卸载器均为管理员权限
+; (RequestExecutionLevel admin),taskkill 可直接结束提权应用。
+; 要点:1) 退出码判断 0=已结束 128=未运行 其他=无法结束
+; 2) 不用 /T 树杀:先杀子进程会把主进程卡成僵尸,必须先杀主进程
 !macro KILL_RUNNING_APP
   kill_app_retry:
     nsExec::ExecToStack 'taskkill /F /IM "clipboard-manager-tauri.exe"'
@@ -20,16 +17,8 @@
     Sleep 500
     ${If} $0 <> 0
     ${AndIf} $0 <> 128
-      nsExec::Exec '$SYSDIR\WindowsPowerShell\v1.0\powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process taskkill -ArgumentList /F,/IM,clipboard-manager-tauri.exe -Verb RunAs -Wait"'
-      Pop $9
-      Sleep 800
-      nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq clipboard-manager-tauri.exe"'
-      Pop $0
-      Pop $9
-      ${If} $0 = 0
-        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "剪贴板管理器正在运行且无法自动关闭(以管理员身份运行)。$\n$\n请从系统托盘图标右键退出应用,或在任务管理器中结束 clipboard-manager-tauri.exe,然后点击「重试」。$\n$\n点击「取消」将中止当前操作。" IDRETRY kill_app_retry
-        Abort "无法关闭正在运行的剪贴板管理器"
-      ${EndIf}
+      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "剪贴板管理器正在运行但无法自动结束。$\n$\n请从系统托盘图标右键退出应用,或在任务管理器中结束 clipboard-manager-tauri.exe(若结束不掉说明进程已僵死,重启电脑后再试),然后点击「重试」。$\n$\n点击「取消」将中止当前操作。" IDRETRY kill_app_retry
+      Abort "无法关闭正在运行的剪贴板管理器"
     ${EndIf}
 !macroend
 

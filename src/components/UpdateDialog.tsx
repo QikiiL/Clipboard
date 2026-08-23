@@ -86,6 +86,7 @@ export function UpdateDialog({ info, onClose }: Props) {
           )}
           <p className="text-[11px] text-faint mt-3">
             点击下方按钮前往下载页,下载完成后直接运行安装包覆盖安装,数据自动保留。
+            运行安装包时会请求管理员权限(UAC),若火绒等安全软件弹出提示,请选择允许。
           </p>
         </div>
         <div className="flex justify-end gap-2 px-5 pt-3 pb-4 border-t border-hairline shrink-0">

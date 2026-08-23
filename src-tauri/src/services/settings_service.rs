@@ -4,6 +4,51 @@ use tauri_plugin_store::StoreExt;
 const STORE_FILE: &str = "settings.json";
 const STORE_KEY: &str = "app_settings";
 
+/// 开机自启动的任务计划名。提权应用(requireAdministrator manifest)
+/// 无法用注册表 Run 键自启动——登录时 Windows 不自动弹 UAC,会静默跳过;
+/// 任务计划程序的"最高权限运行"是标准做法,登录即启动且无需 UAC
+const AUTOSTART_TASK: &str = "ClipboardManagerAutostart";
+
+fn run_schtasks(args: &[&str]) -> Result<std::process::Output, String> {
+    use std::os::windows::process::CommandExt;
+    // CREATE_NO_WINDOW:应用在 UI 会话里跑 schtasks,别闪控制台黑窗
+    std::process::Command::new("schtasks")
+        .args(args)
+        .creation_flags(0x0800_0000)
+        .output()
+        .map_err(|e| format!("无法执行 schtasks: {}", e))
+}
+
+pub fn enable_autostart(exe_path: &str) -> Result<(), String> {
+    let tr = format!("\"{}\" --minimized", exe_path);
+    let output = run_schtasks(&[
+        "/Create", "/TN", AUTOSTART_TASK, "/TR", &tr, "/SC", "ONLOGON", "/RL", "HIGHEST", "/F",
+    ])?;
+    if !output.status.success() {
+        return Err(format!(
+            "创建自启动任务失败: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
+pub fn disable_autostart() -> Result<(), String> {
+    // 任务本就不存在视为已关闭,不算失败(幂等)
+    let query = run_schtasks(&["/Query", "/TN", AUTOSTART_TASK])?;
+    if !query.status.success() {
+        return Ok(());
+    }
+    let output = run_schtasks(&["/Delete", "/TN", AUTOSTART_TASK, "/F"])?;
+    if !output.status.success() {
+        return Err(format!(
+            "删除自启动任务失败: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
 /// settings.json 固定放在程序目录的 config/ 下(绝对路径传入,
 /// 不走插件默认的 %APPDATA% 解析)
 fn store_path() -> std::path::PathBuf {
@@ -40,16 +85,15 @@ pub fn save_settings(app_handle: &tauri::AppHandle, settings: &AppSettings) -> R
 
     // 同步自动启动状态（最佳努力，不影响设置保存）
     if settings.start_with_windows != previous.start_with_windows {
-        use tauri_plugin_autostart::ManagerExt;
-        if settings.start_with_windows {
-            if let Err(e) = app_handle.autolaunch().enable() {
-                eprintln!("Failed to enable autolaunch: {}", e);
-            }
-        } else if let Err(e) = app_handle.autolaunch().disable() {
-            // 自启项本就不存在(os error 2)说明已是关闭状态,不算失败
-            if !e.to_string().contains("os error 2") {
-                eprintln!("Failed to disable autolaunch: {}", e);
-            }
+        let result = if settings.start_with_windows {
+            std::env::current_exe()
+                .map_err(|e| e.to_string())
+                .and_then(|p| enable_autostart(&p.to_string_lossy()))
+        } else {
+            disable_autostart()
+        };
+        if let Err(e) = result {
+            eprintln!("Failed to sync autostart: {}", e);
         }
     }
 

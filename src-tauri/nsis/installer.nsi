@@ -101,7 +101,10 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 !endif
 
 !if "${INSTALLMODE}" == "currentUser"
-  RequestExecutionLevel user
+  ; clipboard 项目定制:应用本体要求管理员权限(manifest requireAdministrator),
+  ; 安装器也提权才能直接结束正在运行的提权应用(否则要借道 PowerShell
+  ; 提权,会被火绒等安全软件拦截)。安装包请求管理员是常规行为,不会误报
+  RequestExecutionLevel admin
 !endif
 
 !if "${INSTALLMODE}" == "both"
@@ -343,14 +346,13 @@ Function PageLeaveReinstall
     ClearErrors
 
     ; ==== clipboard 项目定制(基于 tauri-v2.11.2 官方模板,升级时同步) ====
-    ; 运行旧版卸载器前先结束正在运行的应用。要点:
-    ; 1) 应用 manifest 为 requireAdministrator,普通权限 taskkill 杀不掉提权
-    ;    主进程,需用退出码判断:0=已结束 128=未运行 其他(255)=存在但需提权
-    ;    (nsis_tauri_utils::FindProcessCurrentUser 看不到提权进程,不可用)
-    ; 2) 绝不能用 /T 树杀:先杀 WebView2 子进程会把主进程卡成杀不掉的
-    ;    僵尸(实测管理员权限也无法结束),必须先杀主进程,子进程随之退出
-    ; 3) 提权重杀用 UAC(Start-Process -Verb RunAs);参数用逗号分隔,
-    ;    嵌套引号会破坏 NSIS 里的 PowerShell 命令解析导致静默失败
+    ; 运行旧版卸载器前先结束正在运行的应用。安装器已 RequestExecutionLevel
+    ; admin,taskkill 可直接结束提权应用,无需 PowerShell 中转(会被安全软件
+    ; 拦截)。要点:
+    ; 1) 用退出码判断:0=已结束 128=未运行 其他(255)=无法结束(如僵尸进程)
+    ;    (FindProcessCurrentUser 看不到提权进程,不可用)
+    ; 2) 不用 /T 树杀:先杀 WebView2 子进程会把主进程卡成杀不掉的僵尸,
+    ;    必须先杀主进程,子进程随之退出
     app_kill_retry:
       nsExec::ExecToStack 'taskkill /F /IM "clipboard-manager-tauri.exe"'
       Pop $0
@@ -358,16 +360,8 @@ Function PageLeaveReinstall
       Sleep 500
       ${If} $0 <> 0
       ${AndIf} $0 <> 128
-        nsExec::Exec '$SYSDIR\WindowsPowerShell\v1.0\powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process taskkill -ArgumentList /F,/IM,clipboard-manager-tauri.exe -Verb RunAs -Wait"'
-        Pop $9
-        Sleep 800
-        nsExec::ExecToStack 'tasklist /FI "IMAGENAME eq clipboard-manager-tauri.exe"'
-        Pop $0
-        Pop $9
-        ${If} $0 = 0
-          MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "剪贴板管理器正在运行且无法自动关闭(以管理员身份运行)。$\n$\n请从系统托盘图标右键退出应用,或在任务管理器中结束 clipboard-manager-tauri.exe,然后点击「重试」。$\n$\n点击「取消」将退出安装。" IDRETRY app_kill_retry
-          Abort "无法关闭正在运行的剪贴板管理器"
-        ${EndIf}
+        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "剪贴板管理器正在运行但无法自动结束。$\n$\n请从系统托盘图标右键退出应用,或在任务管理器中结束 clipboard-manager-tauri.exe(若结束不掉说明进程已僵死,重启电脑后再安装),然后点击「重试」。$\n$\n点击「取消」将退出安装。" IDRETRY app_kill_retry
+        Abort "无法关闭正在运行的剪贴板管理器"
       ${EndIf}
     ; ==== 定制结束 ====
 

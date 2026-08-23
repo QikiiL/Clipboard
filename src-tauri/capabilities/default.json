@@ -16,7 +16,6 @@
     "global-shortcut:default",
     "sql:default",
     "store:default",
-    "core:tray:default",
-    "autostart:default"
+    "core:tray:default"
   ]
 }

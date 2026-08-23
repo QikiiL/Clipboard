@@ -110,10 +110,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--minimized"]),
-        ))
+        // 开机自启动改用任务计划程序(见 settings_service):提权应用无法
+        // 经注册表 Run 键自启动,插件方案对本应用无效,故不再注册
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations(&db_url_for_plugin, get_migrations())
@@ -254,6 +252,18 @@ pub fn run() {
             app.manage(commands::window::LastHotkey(std::sync::Mutex::new(Some(
                 startup_shortcut,
             ))));
+
+            // 自启动自愈:设置开启但任务计划丢失(如旧版用注册表 Run 键、或任务被
+            // 安全软件清理)时重建,保证"开机自启动"开关真实生效
+            if saved_settings.start_with_windows {
+                if let Ok(exe) = std::env::current_exe() {
+                    if let Err(e) =
+                        services::settings_service::enable_autostart(&exe.to_string_lossy())
+                    {
+                        eprintln!("Autostart self-heal failed: {}", e);
+                    }
+                }
+            }
 
             // 启动定时清理任务（每小时）
             let app_handle_cleanup = app.handle().clone();
