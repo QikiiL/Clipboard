@@ -1,6 +1,6 @@
 {
-  "version": "0.1.3",
-  "notes": "安装更新时自动关闭运行中的软件,不再出现无法安装\n检查更新支持系统代理与备用镜像,国内网络下成功率大幅提升\n状态栏显示当前版本号\n更新说明分点显示,内容较多时可滚动查看",
+  "version": "0.1.4",
+  "notes": "升级安装流程优化:应用运行中可直接覆盖安装升级,无需手动退出",
   "github": "https://github.com/QikiiL/Clipboard/releases",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybcgdve",
   "lanzou_password": "ec4y"
