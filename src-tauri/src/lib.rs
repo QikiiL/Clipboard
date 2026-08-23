@@ -307,6 +307,7 @@ pub fn run() {
             services::storage_service::reset_storage_location,
             commands::update::check_update,
             commands::update::open_external_url,
+            commands::update::write_clipboard_text,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application");

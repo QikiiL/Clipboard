@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 export interface UpdateInfo {
@@ -7,6 +8,7 @@ export interface UpdateInfo {
   notes?: string | null;
   github?: string | null;
   lanzou?: string | null;
+  lanzou_password?: string | null;
 }
 
 interface Props {
@@ -20,8 +22,21 @@ function openUrl(url: string) {
 
 /** 发现新版本:展示更新说明,用户选择从 GitHub 或蓝奏云手动下载 */
 export function UpdateDialog({ info, onClose }: Props) {
+  const [pwdCopied, setPwdCopied] = useState(false);
   const downloadBtn =
     'flex-1 h-[31px] text-[12.5px] rounded-[10px] font-medium transition-colors duration-150';
+
+  const copyPassword = async () => {
+    if (!info.lanzou_password) return;
+    try {
+      await invoke('write_clipboard_text', { text: info.lanzou_password });
+      setPwdCopied(true);
+      setTimeout(() => setPwdCopied(false), 2000);
+    } catch (err) {
+      console.error('Copy password failed:', err);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
       <div className="bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-xs mx-4 overflow-hidden">
@@ -35,6 +50,20 @@ export function UpdateDialog({ info, onClose }: Props) {
           <p className="text-[13px] leading-relaxed text-ink whitespace-pre-wrap">
             {info.notes || '优化与问题修复。'}
           </p>
+          {info.lanzou && info.lanzou_password && (
+            <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-[8px] bg-app border border-hairline">
+              <span className="text-[11px] text-faint shrink-0">蓝奏云密码</span>
+              <span className="text-[13px] font-mono font-medium tracking-widest text-ink select-all truncate">
+                {info.lanzou_password}
+              </span>
+              <button
+                onClick={copyPassword}
+                className="ml-auto shrink-0 h-[22px] px-2.5 text-[11px] rounded-[6px] border border-hairline text-muted hover:bg-hairline transition-colors duration-150"
+              >
+                {pwdCopied ? '已复制' : '复制'}
+              </button>
+            </div>
+          )}
           <p className="text-[11px] text-faint mt-3">
             点击下方按钮前往下载页,下载完成后直接运行安装包覆盖安装,数据自动保留。
           </p>
@@ -48,7 +77,11 @@ export function UpdateDialog({ info, onClose }: Props) {
           </button>
           {info.lanzou && (
             <button
-              onClick={() => openUrl(info.lanzou!)}
+              onClick={() => {
+                // 双保险一:点击下载时自动把密码写入剪贴板
+                if (info.lanzou_password) void copyPassword();
+                openUrl(info.lanzou!);
+              }}
               className={`${downloadBtn} border border-hairline text-muted hover:bg-hairline`}
             >
               蓝奏云下载

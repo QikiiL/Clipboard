@@ -4,7 +4,7 @@ use serde::Serialize;
 /// 可公开访问的静态位置(GitHub raw / Gitee / 对象存储均可),并更新此常量。
 const VERSION_JSON_URL: &str = "https://raw.githubusercontent.com/EXAMPLE/clipboard/main/version.json";
 
-/// version.json 的结构:版本号 + 更新说明 + 两个手动下载页地址
+/// version.json 的结构:版本号 + 更新说明 + 两个手动下载页地址 + 蓝奏云密码
 #[derive(serde::Deserialize, Clone)]
 struct UpdateManifest {
     version: String,
@@ -14,6 +14,8 @@ struct UpdateManifest {
     github: Option<String>,
     #[serde(default)]
     lanzou: Option<String>,
+    #[serde(default)]
+    lanzou_password: Option<String>,
 }
 
 #[derive(Serialize, Clone)]
@@ -24,6 +26,7 @@ pub struct UpdateInfo {
     pub notes: Option<String>,
     pub github: Option<String>,
     pub lanzou: Option<String>,
+    pub lanzou_password: Option<String>,
 }
 
 fn version_tuple(v: &str) -> (u64, u64, u64) {
@@ -61,7 +64,15 @@ pub fn check_update(app: tauri::AppHandle) -> Result<UpdateInfo, String> {
         notes: manifest.notes,
         github: manifest.github,
         lanzou: manifest.lanzou,
+        lanzou_password: manifest.lanzou_password.filter(|p| !p.is_empty()),
     })
+}
+
+/// 写入纯文本到系统剪贴板(复制蓝奏云密码用)
+#[tauri::command]
+pub fn write_clipboard_text(text: String) -> Result<(), String> {
+    let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
+    cb.set_text(text).map_err(|e| e.to_string())
 }
 
 /// 在系统默认浏览器打开外部链接(更新下载页)
