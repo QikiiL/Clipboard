@@ -1,6 +1,6 @@
 {
   "version": "0.1.2",
-  "notes": "修复启动时剪贴板内容偶发不显示的问题;界面响应更快(减少无谓重绘);设置面板检查更新现在也会显示并自动复制蓝奏云密码;自动清理历史后自动压缩数据库文件;修复按 Esc 关闭弹窗时误清搜索词的问题。",
+  "notes": "修复启动时剪贴板内容偶发不显示的问题\n界面响应更快(减少无谓重绘)\n设置面板检查更新现在也会显示并自动复制蓝奏云密码\n自动清理历史后自动压缩数据库文件\n修复按 Esc 关闭弹窗时误清搜索词的问题",
   "github": "https://github.com/QikiiL/Clipboard/releases",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybcgdve",
   "lanzou_password": "ec4y"

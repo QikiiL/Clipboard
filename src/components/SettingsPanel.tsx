@@ -5,7 +5,7 @@ import { useClipboardStore } from '../stores/clipboardStore';
 import type { AppSettings } from '../types/settings';
 import { DEFAULT_SETTINGS } from '../types/settings';
 import { XIcon } from './icons';
-import type { UpdateInfo } from './UpdateDialog';
+import { parseUpdateNotes, type UpdateInfo } from './UpdateDialog';
 
 interface Props {
   isOpen: boolean;
@@ -517,8 +517,15 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                 <p className="text-[11px] text-faint">
                   当前 v{updateResult.current} → 最新 <span className="text-accent">v{updateResult.latest}</span>
                 </p>
-                {updateResult.notes && (
-                  <p className="text-[11px] text-faint mt-1 whitespace-pre-wrap">{updateResult.notes}</p>
+                {parseUpdateNotes(updateResult.notes).length > 0 && (
+                  <ul className="mt-1.5 space-y-1">
+                    {parseUpdateNotes(updateResult.notes).map((line, i) => (
+                      <li key={i} className="flex gap-1.5 text-[11px] leading-relaxed text-faint">
+                        <span className="text-accent shrink-0 select-none">•</span>
+                        <span className="min-w-0 break-words">{line}</span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
                 {updateResult.lanzou && updateResult.lanzou_password && (
                   <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-[8px] bg-app border border-hairline">
