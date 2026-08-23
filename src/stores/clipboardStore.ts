@@ -10,6 +10,8 @@ interface ClipboardStore {
   showFavorites: boolean;
   isLoading: boolean;
   isPaused: boolean;
+  requestId: number;
+  maxItems: number;
 
   setItems: (items: ClipboardItem[]) => void;
   addItem: (item: ClipboardItem) => void;
@@ -21,9 +23,11 @@ interface ClipboardStore {
   setShowFavorites: (show: boolean) => void;
   setLoading: (loading: boolean) => void;
   setPaused: (paused: boolean) => void;
+  setMaxItems: (maxItems: number) => void;
+  incrementRequestId: () => number;
 }
 
-export const useClipboardStore = create<ClipboardStore>((set) => ({
+export const useClipboardStore = create<ClipboardStore>((set, get) => ({
   items: [],
   groups: [],
   selectedGroup: null,
@@ -31,6 +35,8 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   showFavorites: false,
   isLoading: false,
   isPaused: false,
+  requestId: 0,
+  maxItems: 500,
 
   setItems: (items) => set({ items }),
   addItem: (item) => set((state) => ({ items: [item, ...state.items] })),
@@ -46,4 +52,10 @@ export const useClipboardStore = create<ClipboardStore>((set) => ({
   setShowFavorites: (showFavorites) => set({ showFavorites }),
   setLoading: (isLoading) => set({ isLoading }),
   setPaused: (isPaused) => set({ isPaused }),
+  setMaxItems: (maxItems) => set({ maxItems }),
+  incrementRequestId: () => {
+    const id = get().requestId + 1;
+    set({ requestId: id });
+    return id;
+  },
 }));

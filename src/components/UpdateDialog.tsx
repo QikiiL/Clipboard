@@ -1,0 +1,69 @@
+import { invoke } from '@tauri-apps/api/core';
+
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  has_update: boolean;
+  notes?: string | null;
+  github?: string | null;
+  lanzou?: string | null;
+}
+
+interface Props {
+  info: UpdateInfo;
+  onClose: () => void;
+}
+
+function openUrl(url: string) {
+  invoke('open_external_url', { url }).catch((err) => console.error('Open URL failed:', err));
+}
+
+/** 发现新版本:展示更新说明,用户选择从 GitHub 或蓝奏云手动下载 */
+export function UpdateDialog({ info, onClose }: Props) {
+  const downloadBtn =
+    'flex-1 h-[31px] text-[12.5px] rounded-[10px] font-medium transition-colors duration-150';
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
+      <div className="bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-xs mx-4 overflow-hidden">
+        <div className="px-5 pt-3.5 pb-3 border-b border-hairline">
+          <h3 className="text-sm font-semibold">
+            发现新版本 <span className="text-accent">v{info.latest}</span>
+          </h3>
+        </div>
+        <div className="px-5 py-4">
+          <p className="text-[11px] text-faint mb-2">当前版本 v{info.current}</p>
+          <p className="text-[13px] leading-relaxed text-ink whitespace-pre-wrap">
+            {info.notes || '优化与问题修复。'}
+          </p>
+          <p className="text-[11px] text-faint mt-3">
+            点击下方按钮前往下载页,下载完成后直接运行安装包覆盖安装,数据自动保留。
+          </p>
+        </div>
+        <div className="flex justify-end gap-2 px-5 pt-3 pb-4 border-t border-hairline">
+          <button
+            onClick={onClose}
+            className="h-[31px] px-4 text-[12.5px] rounded-[10px] text-muted hover:bg-app transition-colors duration-150"
+          >
+            以后再说
+          </button>
+          {info.lanzou && (
+            <button
+              onClick={() => openUrl(info.lanzou!)}
+              className={`${downloadBtn} border border-hairline text-muted hover:bg-hairline`}
+            >
+              蓝奏云下载
+            </button>
+          )}
+          {info.github && (
+            <button
+              onClick={() => openUrl(info.github!)}
+              className={`${downloadBtn} bg-accent text-on-accent hover:bg-accent-deep`}
+            >
+              GitHub 下载
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

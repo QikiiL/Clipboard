@@ -1,15 +1,187 @@
+use crate::models::clipboard_type::ClipboardType;
 use crate::utils::hash::{compute_hash, compute_hash_bytes};
 use arboard::Clipboard as ArboardClipboard;
+use image::RgbaImage;
 use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 use tokio::sync::Mutex;
 
+/// Fallback: read CF_DIB from the Windows clipboard directly and convert to RGBA.
+/// Returns (rgba_bytes, width, height) or None.
+fn read_clipboard_dib_fallback() -> Option<(Vec<u8>, usize, usize)> {
+    use clipboard_win::formats::RawData;
+
+    let _clip = clipboard_win::Clipboard::new().ok()?;
+
+    // CF_DIB = 8
+    const CF_DIB: u32 = 8;
+    if !clipboard_win::is_format_avail(CF_DIB) {
+        return None;
+    }
+
+    let dib_data: Vec<u8> = clipboard_win::get(RawData(CF_DIB)).ok()?;
+    if dib_data.len() < 36 {
+        return None;
+    }
+
+    // Read BITMAPINFOHEADER size from first 4 bytes
+    let header_size =
+        u32::from_le_bytes([dib_data[0], dib_data[1], dib_data[2], dib_data[3]]) as usize;
+
+    // Read biBitCount (offset 14) and biClrUsed (offset 32) for color table size
+    let bit_count = u16::from_le_bytes([dib_data[14], dib_data[15]]);
+    let clr_used =
+        u32::from_le_bytes([dib_data[32], dib_data[33], dib_data[34], dib_data[35]]) as usize;
+    let color_table_size = if clr_used > 0 {
+        clr_used * 4
+    } else if bit_count <= 8 {
+        (1usize << bit_count) * 4
+    } else {
+        0
+    };
+
+    // Prepend a 14-byte BMP file header
+    let file_size = 14u32 + dib_data.len() as u32;
+    let pixel_offset = 14u32 + header_size as u32 + color_table_size as u32;
+    let mut bmp_data = Vec::with_capacity(file_size as usize);
+    bmp_data.extend_from_slice(b"BM");
+    bmp_data.extend_from_slice(&file_size.to_le_bytes());
+    bmp_data.extend_from_slice(&[0u8; 4]); // reserved
+    bmp_data.extend_from_slice(&pixel_offset.to_le_bytes());
+    bmp_data.extend_from_slice(&dib_data);
+
+    let img = image::load_from_memory(&bmp_data).ok()?;
+    let rgba = img.to_rgba8();
+    let width = rgba.width() as usize;
+    let height = rgba.height() as usize;
+    Some((rgba.into_raw(), width, height))
+}
+
+/// Check if a string looks like a file path (Windows drive letter, Unix path, or UNC path).
 fn is_file_path(s: &str) -> bool {
-    // Check for Windows drive letter (C:\...) or Unix path (/...)
-    (s.len() >= 3 && s.as_bytes()[1] == b':' && (s.as_bytes()[2] == b'\\' || s.as_bytes()[2] == b'/'))
-        || s.starts_with('/')
-        || s.contains('\\')
+    // Windows drive letter (C:\...)
+    (s.len() >= 3
+        && s.as_bytes()[1] == b':'
+        && (s.as_bytes()[2] == b'\\' || s.as_bytes()[2] == b'/'))
+    // Unix path
+    || s.starts_with('/')
+    // UNC path (\\server\share)
+    || (s.starts_with("\\\\") && s.len() > 2)
+}
+
+/// Detect content type from text content.
+fn detect_content_type(text: &str) -> i32 {
+    if text.starts_with("http://") || text.starts_with("https://") {
+        ClipboardType::Link as i32
+    } else if is_file_path(text) {
+        ClipboardType::File as i32
+    } else {
+        ClipboardType::Text as i32
+    }
+}
+
+/// Read clipboard content on a blocking thread.
+/// Returns (content, item_type, image_hash, image_bytes, width, height) or None.
+fn read_clipboard_content() -> Option<(String, i32, Option<String>, Option<Vec<u8>>, usize, usize)>
+{
+    // Try reading a file list (CF_HDROP) first — copied from Explorer.
+    // The clipboard_win guard must be dropped before arboard calls below,
+    // as both open the clipboard exclusively.
+    {
+        let _clip = clipboard_win::Clipboard::new().ok()?;
+        const CF_HDROP: u32 = 15;
+        if clipboard_win::is_format_avail(CF_HDROP) {
+            let files: Vec<String> = clipboard_win::get(clipboard_win::formats::FileList).ok()?;
+            if !files.is_empty() {
+                let content = files.join("\n");
+                return Some((content, ClipboardType::File as i32, None, None, 0, 0));
+            }
+        }
+    }
+
+    let mut cb = ArboardClipboard::new().ok()?;
+
+    // Try reading an image first
+    match cb.get_image() {
+        Ok(img) => {
+            let bytes = img.bytes.to_vec();
+            let width = img.width;
+            let height = img.height;
+            let hash = compute_hash_bytes(&bytes);
+            return Some((
+                "[图片]".to_string(),
+                ClipboardType::Image as i32,
+                Some(hash),
+                Some(bytes),
+                width,
+                height,
+            ));
+        }
+        Err(_) => {
+            // Try DIB fallback (Windows-specific)
+            if let Some((bytes, width, height)) = read_clipboard_dib_fallback() {
+                let hash = compute_hash_bytes(&bytes);
+                return Some((
+                    "[图片]".to_string(),
+                    ClipboardType::Image as i32,
+                    Some(hash),
+                    Some(bytes),
+                    width,
+                    height,
+                ));
+            }
+        }
+    }
+
+    // Try reading text
+    match cb.get_text() {
+        Ok(text) => {
+            if !text.is_empty() {
+                let item_type = detect_content_type(&text);
+                Some((text, item_type, None, None, 0usize, 0usize))
+            } else {
+                None
+            }
+        }
+        Err(_) => None,
+    }
+}
+
+/// Save image bytes as a PNG file to the app's images directory.
+fn save_image_to_disk(
+    app_handle: &tauri::AppHandle,
+    hash: &str,
+    bytes: &[u8],
+    width: usize,
+    height: usize,
+) -> Option<String> {
+    let images_dir = crate::services::storage_service::images_dir(app_handle);
+    if let Err(e) = std::fs::create_dir_all(&images_dir) {
+        eprintln!("Failed to create images directory: {}", e);
+    }
+    let file_name = format!("{}.png", &hash[..hash.len().min(16)]);
+    let path = images_dir.join(&file_name);
+    if let Some(img_buf) = RgbaImage::from_raw(width as u32, height as u32, bytes.to_vec()) {
+        // Convert to RGB to strip alpha channel and color profile metadata.
+        // This prevents the "iCCP: cHRM chunk does not match sRGB" libpng warning.
+        let dynamic_img = image::DynamicImage::ImageRgba8(img_buf);
+        let rgb_img = dynamic_img.to_rgb8();
+        if rgb_img.save(&path).is_ok() {
+            Some(path.to_string_lossy().to_string())
+        } else {
+            eprintln!("Failed to save image to {:?}", path);
+            None
+        }
+    } else {
+        eprintln!(
+            "Failed to create RgbaImage from raw bytes: dimensions={}x{}, byte_count={}",
+            width,
+            height,
+            bytes.len()
+        );
+        None
+    }
 }
 
 pub struct ClipboardMonitor {
@@ -50,76 +222,43 @@ impl ClipboardMonitor {
     pub fn start_polling(app_handle: tauri::AppHandle, db: SqlitePool, monitor: ClipboardMonitor) {
         let monitor = monitor.clone();
         tauri::async_runtime::spawn(async move {
-            // Initial clipboard capture on startup
-            let initial_clipboard = tokio::task::spawn_blocking(|| -> Option<(String, i32, Option<String>, Option<Vec<u8>>)> {
-                let mut cb = ArboardClipboard::new().ok()?;
-                if let Ok(img) = cb.get_image() {
-                    let bytes = img.bytes.to_vec();
-                    let hash = compute_hash_bytes(&bytes);
-                    return Some(("[图片]".to_string(), 2, Some(hash), Some(bytes)));
-                }
-                if let Ok(text) = cb.get_text() {
-                    if !text.is_empty() {
-                        let item_type = if text.starts_with("http://") || text.starts_with("https://") {
-                            1 // Link
-                        } else if is_file_path(&text) {
-                            3 // File
-                        } else {
-                            0 // Text
-                        };
-                        return Some((text, item_type, None, None));
-                    }
-                }
-                None
-            }).await.unwrap_or(None);
+            // Initial clipboard capture on startup (skipped while paused)
+            if !*monitor.paused.lock().await {
+                let initial_clipboard = tokio::task::spawn_blocking(read_clipboard_content)
+                    .await
+                    .unwrap_or(None);
 
-            if let Some((content, item_type, image_hash, image_bytes)) = initial_clipboard {
-                let hash = if let Some(ih) = image_hash { ih } else { compute_hash(&content) };
-                let preview = if content.chars().count() > 100 {
-                    content.chars().take(100).collect::<String>()
-                } else {
-                    content.clone()
-                };
+                if let Some((content, item_type, image_hash, image_bytes, img_width, img_height)) =
+                    initial_clipboard
+                {
+                    let hash = if let Some(ih) = image_hash {
+                        ih
+                    } else {
+                        compute_hash(&content)
+                    };
+                    let preview: String = content.chars().take(100).collect();
 
-                let file_path: Option<String> = if item_type == 2 {
-                    if let Some(bytes) = image_bytes {
-                        let images_dir = app_handle
-                            .path()
-                            .app_data_dir()
-                            .unwrap_or_default()
-                            .join("images");
-                        let _ = std::fs::create_dir_all(&images_dir);
-                        let file_name = format!("{}.png", &hash[..16]);
-                        let path = images_dir.join(&file_name);
-                        if std::fs::write(&path, &bytes).is_ok() {
-                            Some(path.to_string_lossy().to_string())
-                        } else {
-                            None
-                        }
+                    let file_path: Option<String> = if item_type == ClipboardType::Image as i32 {
+                        image_bytes.as_deref().and_then(|bytes| {
+                            save_image_to_disk(&app_handle, &hash, bytes, img_width, img_height)
+                        })
                     } else {
                         None
+                    };
+
+                    {
+                        let mut last = monitor.last_hash.lock().await;
+                        *last = hash.clone();
                     }
-                } else {
-                    None
-                };
 
-                {
-                    let mut last = monitor.last_hash.lock().await;
-                    *last = hash.clone();
-                }
+                    let existing = sqlx::query_scalar::<_, i64>(
+                        "SELECT id FROM items WHERE content_hash = ? LIMIT 1",
+                    )
+                    .bind(&hash)
+                    .fetch_optional(&db)
+                    .await;
 
-                let existing = sqlx::query_scalar::<_, i64>(
-                    "SELECT id FROM items WHERE content_hash = ? LIMIT 1",
-                )
-                .bind(&hash)
-                .fetch_optional(&db)
-                .await;
-
-                match existing {
-                    Ok(Some(_)) => {
-                        // Already exists, skip
-                    }
-                    _ => {
+                    if existing.ok().flatten().is_none() {
                         let _ = sqlx::query(
                             "INSERT INTO items (type, content, content_hash, file_path, preview) VALUES (?, ?, ?, ?, ?)",
                         )
@@ -142,35 +281,13 @@ impl ClipboardMonitor {
                 }
 
                 // Read clipboard on a blocking thread to avoid arboard deadlocks
-                let clipboard_result =
-                    tokio::task::spawn_blocking(|| -> Option<(String, i32, Option<String>, Option<Vec<u8>>)> {
-                        let mut cb = ArboardClipboard::new().ok()?;
-                        // Try image first
-                        if let Ok(img) = cb.get_image() {
-                            let bytes = img.bytes.to_vec();
-                            let hash = compute_hash_bytes(&bytes);
-                            return Some(("[图片]".to_string(), 2, Some(hash), Some(bytes)));
-                        }
-                        // Try text / file path
-                        if let Ok(text) = cb.get_text() {
-                            if !text.is_empty() {
-                                let item_type =
-                                    if text.starts_with("http://") || text.starts_with("https://") {
-                                        1 // Link
-                                    } else if is_file_path(&text) {
-                                        3 // File
-                                    } else {
-                                        0 // Text
-                                    };
-                                return Some((text, item_type, None, None));
-                            }
-                        }
-                        None
-                    })
+                let clipboard_result = tokio::task::spawn_blocking(read_clipboard_content)
                     .await
                     .unwrap_or(None);
 
-                let Some((content, item_type, image_hash, image_bytes)) = clipboard_result else {
+                let Some((content, item_type, image_hash, image_bytes, img_width, img_height)) =
+                    clipboard_result
+                else {
                     continue;
                 };
 
@@ -193,34 +310,13 @@ impl ClipboardMonitor {
                     continue;
                 }
 
-                let preview = if content.chars().count() > 100 {
-                    content.chars().take(100).collect::<String>()
-                } else {
-                    content.clone()
-                };
+                let preview: String = content.chars().take(100).collect();
 
                 // Save image bytes to file if it's an image
-                let file_path: Option<String> = if item_type == 2 {
-                    if let Some(bytes) = image_bytes {
-                        let images_dir = app_handle
-                            .path()
-                            .app_data_dir()
-                            .unwrap_or_default()
-                            .join("images");
-                        if let Err(e) = std::fs::create_dir_all(&images_dir) {
-                            eprintln!("Failed to create images directory: {}", e);
-                        }
-                        let file_name = format!("{}.png", &hash[..16]);
-                        let path = images_dir.join(&file_name);
-                        if std::fs::write(&path, &bytes).is_ok() {
-                            Some(path.to_string_lossy().to_string())
-                        } else {
-                            eprintln!("Failed to save image to {:?}", path);
-                            None
-                        }
-                    } else {
-                        None
-                    }
+                let file_path: Option<String> = if item_type == ClipboardType::Image as i32 {
+                    image_bytes.as_deref().and_then(|bytes| {
+                        save_image_to_disk(&app_handle, &hash, bytes, img_width, img_height)
+                    })
                 } else {
                     None
                 };
@@ -242,7 +338,7 @@ impl ClipboardMonitor {
                 match existing {
                     Ok(Some(id)) => {
                         let _ = sqlx::query(
-                            "UPDATE items SET copy_count = copy_count + 1, last_used_at = datetime('now') WHERE id = ?",
+                            "UPDATE items SET last_used_at = datetime('now') WHERE id = ?",
                         )
                         .bind(id)
                         .execute(&db)
@@ -273,10 +369,8 @@ impl ClipboardMonitor {
                             if *monitor.suppress.lock().await {
                                 continue;
                             }
-                            let _ = app_handle.emit(
-                                "clipboard-changed",
-                                serde_json::json!({"action": "new"}),
-                            );
+                            let _ = app_handle
+                                .emit("clipboard-changed", serde_json::json!({"action": "new"}));
                         }
                     }
                 }

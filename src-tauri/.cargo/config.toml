@@ -1,2 +1,8 @@
 [registries.crates-io]
 protocol = "sparse"
+
+# 本机 mingw-w64 ld 对 cdylib 自动导出符号数量有 bug("export ordinal too
+# large"),禁用 DLL 自动导出后链接正常。桌面端 exe 静态链接 rlib,不受影响;
+# 仅作用于 gnu 目标,不影响 MSVC 工具链。
+[target.x86_64-pc-windows-gnu]
+rustflags = ["-C", "link-arg=-Wl,--exclude-all-symbols"]

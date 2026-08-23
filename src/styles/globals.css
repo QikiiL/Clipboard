@@ -1,26 +1,105 @@
 @import 'tailwindcss';
 
+/* 方案 D · 浮笺 令牌:浅色(底色来自设计稿 #F7F7F7) */
+:root {
+  color-scheme: light;
+  --bg: oklch(97.4% 0.002 260);
+  --surface: oklch(99.3% 0.002 260);
+  --text: oklch(24% 0.012 260);
+  --muted: oklch(52% 0.012 260);
+  --faint: oklch(68% 0.01 260);
+  --hair: oklch(90% 0.006 260);
+  --accent: oklch(52% 0.15 258);
+  --accent-deep: oklch(47% 0.15 258);
+  --accent-soft: oklch(94.5% 0.028 258);
+  --accent-ring: oklch(52% 0.15 258 / 0.35);
+  --star: oklch(72% 0.14 88);
+  --ok: oklch(62% 0.14 152);
+  --warn: oklch(78% 0.14 85);
+  --warn-text: oklch(52% 0.12 85);
+  --danger: oklch(58% 0.19 25);
+  --danger-deep: oklch(52% 0.19 25);
+  --on-accent: oklch(98.5% 0.003 250);
+  --lift: 0 1px 2px oklch(20% 0.02 260 / 0.05), 0 3px 10px oklch(20% 0.02 260 / 0.07);
+  --lift-hover: 0 1px 3px oklch(20% 0.02 260 / 0.07), 0 5px 16px oklch(20% 0.02 260 / 0.09);
+  --dialog-shadow: 0 24px 64px oklch(15% 0.02 260 / 0.22);
+}
+
+/* 深色:阴影不可见,浮起改为描边承担 */
+.dark {
+  color-scheme: dark;
+  --bg: oklch(19% 0.006 260);
+  --surface: oklch(24% 0.008 260);
+  --text: oklch(93% 0.005 260);
+  --muted: oklch(70% 0.01 260);
+  --faint: oklch(58% 0.01 260);
+  --hair: oklch(28% 0.008 260);
+  --accent: oklch(72% 0.12 258);
+  --accent-deep: oklch(78% 0.12 258);
+  --accent-soft: oklch(30% 0.055 258);
+  --accent-ring: oklch(72% 0.12 258 / 0.4);
+  --star: oklch(78% 0.14 88);
+  --ok: oklch(74% 0.14 152);
+  --warn: oklch(78% 0.14 85);
+  --warn-text: oklch(80% 0.13 85);
+  --danger: oklch(68% 0.17 25);
+  --danger-deep: oklch(74% 0.17 25);
+  --on-accent: oklch(19% 0.006 260);
+  --lift: inset 0 0 0 1px oklch(30% 0.008 260);
+  --lift-hover: inset 0 0 0 1px oklch(32% 0.008 260);
+  --dialog-shadow: 0 24px 64px oklch(8% 0.01 260 / 0.6);
+}
+
+@theme inline {
+  --color-app: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-hairline: var(--hair);
+  --color-accent: var(--accent);
+  --color-accent-deep: var(--accent-deep);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ring: var(--accent-ring);
+  --color-star: var(--star);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
+  --color-danger: var(--danger);
+  --color-danger-deep: var(--danger-deep);
+  --color-on-accent: var(--on-accent);
+  --shadow-lift: var(--lift);
+  --shadow-lift-hover: var(--lift-hover);
+  --shadow-dialog: var(--dialog-shadow);
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', system-ui, sans-serif;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
-  :root {
-    --color-bg: #ffffff;
-    --color-text: #1a1a1a;
-    --color-border: #e5e7eb;
-    --color-surface: #f9fafb;
-  }
-
-  .dark {
-    --color-bg: #1a1a1a;
-    --color-text: #e5e7eb;
-    --color-border: #374151;
-    --color-surface: #111827;
-  }
-
   body {
-    background-color: var(--color-bg);
-    color: var(--color-text);
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
     margin: 0;
     padding: 0;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 滚动条跟随主题(color-scheme 已声明,这里收窄为 8px 并用令牌上色) */
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--hair);
+    border-radius: 4px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--faint);
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
 }

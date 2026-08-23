@@ -2,7 +2,9 @@ use crate::models::settings::AppSettings;
 
 #[tauri::command]
 pub fn load_settings(app_handle: tauri::AppHandle) -> Result<AppSettings, String> {
-    Ok(crate::services::settings_service::load_settings(&app_handle))
+    Ok(crate::services::settings_service::load_settings(
+        &app_handle,
+    ))
 }
 
 #[tauri::command]

@@ -1,3 +1,5 @@
+export type CloseBehavior = 'ask' | 'minimize' | 'close';
+
 export interface AppSettings {
   start_with_windows: boolean;
   retention_days: number;
@@ -5,6 +7,9 @@ export interface AppSettings {
   hotkey_modifier: string;
   hotkey_key: string;
   paused: boolean;
+  close_behavior: CloseBehavior;
+  win_v_integration: boolean;
+  pinned: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -14,4 +19,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hotkey_modifier: 'Ctrl+Shift',
   hotkey_key: 'V',
   paused: false,
+  close_behavior: 'ask',
+  win_v_integration: false,
+  pinned: false,
 };

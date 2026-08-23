@@ -1,5 +1,19 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CloseBehavior {
+    Ask,
+    Minimize,
+    Close,
+}
+
+impl Default for CloseBehavior {
+    fn default() -> Self {
+        Self::Ask
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub start_with_windows: bool,
@@ -8,6 +22,13 @@ pub struct AppSettings {
     pub hotkey_modifier: String,
     pub hotkey_key: String,
     pub paused: bool,
+    // 兼容旧版 settings.json:后加的字段缺省时不应导致整个结构体反序列化失败
+    #[serde(default)]
+    pub close_behavior: CloseBehavior,
+    #[serde(default)]
+    pub win_v_integration: bool,
+    #[serde(default)]
+    pub pinned: bool,
 }
 
 impl Default for AppSettings {
@@ -19,6 +40,9 @@ impl Default for AppSettings {
             hotkey_modifier: "Ctrl+Shift".to_string(),
             hotkey_key: "V".to_string(),
             paused: false,
+            close_behavior: CloseBehavior::default(),
+            win_v_integration: false,
+            pinned: false,
         }
     }
 }
@@ -33,6 +57,8 @@ mod tests {
         assert_eq!(settings.retention_days, 30);
         assert_eq!(settings.max_item_count, 500);
         assert!(!settings.paused);
+        assert_eq!(settings.close_behavior, CloseBehavior::Ask);
+        assert!(!settings.win_v_integration);
     }
 
     #[test]
@@ -41,5 +67,33 @@ mod tests {
         let json = serde_json::to_string(&settings).unwrap();
         let deserialized: AppSettings = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.retention_days, settings.retention_days);
+    }
+
+    #[test]
+    fn test_close_behavior_serde() {
+        assert_eq!(
+            serde_json::to_string(&CloseBehavior::Ask).unwrap(),
+            "\"ask\""
+        );
+        assert_eq!(
+            serde_json::to_string(&CloseBehavior::Minimize).unwrap(),
+            "\"minimize\""
+        );
+        assert_eq!(
+            serde_json::to_string(&CloseBehavior::Close).unwrap(),
+            "\"close\""
+        );
+        assert_eq!(
+            serde_json::from_str::<CloseBehavior>("\"ask\"").unwrap(),
+            CloseBehavior::Ask
+        );
+        assert_eq!(
+            serde_json::from_str::<CloseBehavior>("\"minimize\"").unwrap(),
+            CloseBehavior::Minimize
+        );
+        assert_eq!(
+            serde_json::from_str::<CloseBehavior>("\"close\"").unwrap(),
+            CloseBehavior::Close
+        );
     }
 }

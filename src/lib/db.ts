@@ -19,17 +19,9 @@ function mapItem(item: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
-export function escapeLike(s: string): string {
-  return s.replace(/[%_[\]]/g, (ch) => `\\${ch}`);
-}
-
+// 只读查询入口;写操作一律走 Rust 命令
 export async function queryItems<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
   const db = await getDb();
   const results = await db.select(sql, params) as Record<string, unknown>[];
   return results.map(mapItem) as unknown as T[];
-}
-
-export async function executeSql(sql: string, params: unknown[] = []) {
-  const db = await getDb();
-  return db.execute(sql, params);
 }

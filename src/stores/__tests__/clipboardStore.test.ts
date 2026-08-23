@@ -9,7 +9,6 @@ const mockItem = {
   content_hash: 'abc123',
   file_path: null,
   preview: 'test content',
-  copy_count: 1,
   is_favorite: false,
   group_id: null,
   created_at: '2026-06-05T00:00:00',
@@ -36,9 +35,9 @@ describe('clipboardStore', () => {
 
   it('updateItem replaces matching item', () => {
     useClipboardStore.getState().addItem(mockItem);
-    const updated = { ...mockItem, copy_count: 5 };
+    const updated = { ...mockItem, is_favorite: true };
     useClipboardStore.getState().updateItem(updated);
-    expect(useClipboardStore.getState().items[0].copy_count).toBe(5);
+    expect(useClipboardStore.getState().items[0].is_favorite).toBe(true);
   });
 
   it('removeItem filters out item', () => {

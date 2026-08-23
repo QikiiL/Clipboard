@@ -1,7 +1,100 @@
-# Tauri + React + Typescript
+# Clipboard · 剪贴板管理器
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+一个为 Windows 打造的剪贴板历史管理工具:复制过的内容自动留档,热键唤出、单击即贴,可直接接管 `Win+V` 成为系统级剪贴板历史。基于 Tauri 2 + React 19 + Rust 构建,纯本地运行,无账号、无云同步、无任何网络上传。
 
-## Recommended IDE Setup
+<!-- 建议在此处补充应用截图:浅色/深色主界面各一张
+![主界面浅色](docs/screenshot-light.png)
+![主界面深色](docs/screenshot-dark.png)
+-->
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+## 比 Windows 原生 Win+V 强在哪
+
+Windows 10/11 自带的剪贴板历史(`Win+V`)只有 25 条上限、不支持文件、数据难以备份。本工具在保持同样"热键唤出、点击即贴"体验的同时,补齐了所有短板:
+
+| 能力 | 剪贴板管理器 | Windows 原生 Win+V |
+| --- | --- | --- |
+| 历史上限 | 默认 500 条,可自由调整甚至无限制 | 固定 25 条 |
+| 文件类型(资源管理器多选复制) | ✅ 支持,原样粘贴回 | ❌ 不支持 |
+| 重启后保留 | ✅ 全部历史保留在本地 | 仅"固定"的少数条目 |
+| 分组归类 | ✅ 自定义分组 + 收藏 | ❌ 仅固定置顶 |
+| 搜索 | ✅ 实时防抖全文搜索 | 简单筛选 |
+| 数据备份/迁移 | ✅ 标准 SQLite + 图片文件夹,整个目录拷走即完成 | ❌ 系统加密存储,无法导出 |
+| 存储位置 | ✅ 任意自定义(含程序目录便携模式) | 固定系统目录 |
+| 云同步与账号 | 不需要、不上传,隐私可控 | 可选微软云同步 |
+| 清理策略 | ✅ 按保留天数/最大条数自动清理,收藏永不清 | 手动清空 |
+| 界面 | ✅ 尺寸位置记忆、置顶、深浅双主题 | 固定面板 |
+| 快捷键 | ✅ 任意自定义,或直接接管 Win+V(肌肉记忆无缝切换) | 仅 Win+V |
+
+## 核心亮点
+
+- **四类内容全支持**:文本、链接、图片(PNG 本地存档)、文件(资源管理器多选复制,原样粘贴回去)——文件类型是原生 Win+V 做不到的
+- **单击即贴**:点击条目自动把焦点还原到唤出前的窗口并模拟 `Ctrl+V`,一气呵成;资源管理器等不便触发粘贴的场景可切"仅复制"模式
+- **极致后台占用**:窗口隐藏即彻底销毁浏览器进程,内存全额归还系统,常驻后台仅约 10 MB——需要时热键唤出,约 1 秒重建
+- **绿色便携布局**:配置(`config/`)与数据(`data/`)都在程序目录下,整个文件夹拷到 U 盘即完成迁移;安装器覆盖升级自动保全这两个目录
+- **智能去重与清理**:SHA-256 内容去重(重复复制只刷新时间),按天数/条数自动清理过期记录并同步删除图片文件,收藏豁免
+- **接管 Win+V**:可选禁用系统剪贴板历史,把 `Win+V` 按键直接接管为本应用,零习惯成本
+- **内置更新检查**:启动时自动检查新版本(设置里也可手动检查),提供 GitHub 与蓝奏云两个下载入口,覆盖安装数据自动保留
+
+## 快捷键
+
+| 快捷键 | 作用 |
+| --- | --- |
+| `Ctrl+Shift+V`(默认,可自定义) | 显示/隐藏主窗口 |
+| `Win+V`(可选接管) | 同上,替代系统剪贴板历史 |
+| `Ctrl+F` | 聚焦搜索框 |
+| `Esc` | 清空搜索 / 关闭弹窗 |
+
+## 安装与使用
+
+- **安装版**:运行 `clipboard-setup.exe`,按引导完成安装(默认安装目录为 `clipboard\`,中文界面)
+- **便携版**:新建任意文件夹(推荐命名 `clipboard`),放入 `clipboard-manager-tauri.exe` 直接运行,`config/` 与 `data/` 自动生成在同目录
+- 首次使用建议:设置里开启"开机自启动";需要接管 `Win+V` 的话以管理员身份运行并开启该开关
+
+> 接管 `Win+V` 需要管理员权限(写入 HKLM 注册表禁用系统剪贴板历史),应用清单已声明,启动时会弹 UAC 确认。
+
+## 数据存储与隐私
+
+```
+clipboard/                  ← 程序文件夹
+├── clipboard-manager-tauri.exe
+├── config/                 ← settings.json、存储位置指针、窗口状态
+└── data/                   ← clipboard.db(SQLite)、images/(PNG)
+```
+
+- 全部数据明文存于本地,可在设置中把 `data/` 改到任意位置(如独立数据盘),迁移自动完成、失败自动回退
+- 应用无任何网络请求,不依赖账号;备份 = 复制 `config/` 与 `data/` 两个文件夹
+- 卸载前请先备份数据(纯卸载时数据会移至程序目录同级的 `clipboard-userdata\` 保全)
+
+## 从源码构建
+
+前置要求:[Node.js](https://nodejs.org/) ≥ 20、[Rust](https://www.rust-lang.org/) stable、Windows 10/11。
+
+```bash
+npm install        # 安装依赖
+npm run tauri dev  # 开发模式(热重载)
+npm run tauri build # 产出 NSIS 安装包
+npm test           # 前端测试
+```
+
+> Windows 下若使用 GNU 工具链,`src-tauri/.cargo/config.toml` 已包含 mingw 链接器配置;打包脚本见 `build-release.bat`。
+
+## 架构概览
+
+- **前端** `src/`:React 19 + TypeScript + Tailwind CSS v4 + Zustand,CSS 变量主题
+- **后端** `src-tauri/`:Rust + Tauri 2,`arboard`/`clipboard-win` 监听剪贴板(含 CF_HDROP 文件列表),`enigo` 模拟粘贴,`sqlx` 写 SQLite(WAL),双连接事件驱动刷新
+- **窗口策略**:主窗口"隐藏即销毁、唤出即重建",热键/托盘统一走 `window_manager`;窗口几何由事件实时持久化
+
+## 已知限制
+
+- 仅支持 Windows(剪贴板文件格式、焦点还原与粘贴模拟均为 Windows 实现)
+- 接管 `Win+V` 需管理员权限,通过重启 `explorer.exe` 使注册表立即生效
+
+## 发布新版本(维护者指南)
+
+1. 更新 `tauri.conf.json` 与 `package.json` 中的版本号,构建产出安装包
+2. 编辑仓库根目录的 `version.json`(版本号、更新说明、GitHub 与蓝奏云下载页地址),上传到固定静态地址(与 `src-tauri/src/commands/update.rs` 里的 `VERSION_JSON_URL` 一致)
+3. 把新安装包分别上传到 GitHub Releases 和蓝奏云即可——已装用户启动应用即会收到更新提醒
+
+## License
+
+待定(TODO:开源前请选择协议,如 MIT / GPL-3.0)

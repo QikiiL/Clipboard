@@ -12,7 +12,6 @@ export interface ClipboardItem {
   content_hash: string;
   file_path: string | null;
   preview: string;
-  copy_count: number;
   is_favorite: boolean;
   group_id: number | null;
   created_at: string;
