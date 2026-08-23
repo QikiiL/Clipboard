@@ -5,8 +5,20 @@
 
 !define USERDATA_BACKUP "$INSTDIR\..\clipboard-userdata"
 
+; 覆盖安装/卸载前结束正在运行的应用(含 WebView2 子进程),
+; 否则 exe 被占用导致"无法安装"。taskkill 对不存在的进程静默失败,无副作用。
+; clipboard.exe = 安装版进程名;clipboard-manager-tauri.exe = 便携版进程名
+!macro KILL_RUNNING_APP
+  nsExec::Exec 'taskkill /F /T /IM "clipboard.exe"'
+  Pop $0
+  nsExec::Exec 'taskkill /F /T /IM "clipboard-manager-tauri.exe"'
+  Pop $0
+  Sleep 500
+!macroend
+
 ; 覆盖安装:新文件复制前,若目录还在(未被旧卸载器处理),移出到备份
 !macro NSIS_HOOK_PREINSTALL
+  !insertmacro KILL_RUNNING_APP
   IfFileExists "$INSTDIR\data\*.*" 0 +3
     CreateDirectory "${USERDATA_BACKUP}"
     Rename "$INSTDIR\data" "${USERDATA_BACKUP}\data"
@@ -40,8 +52,9 @@
   RMDir "${USERDATA_BACKUP}"
 !macroend
 
-; 卸载(含覆盖安装触发的静默卸载)前:把用户数据移到安装目录之外
+; 卸载(含覆盖安装触发的静默卸载)前:结束运行中的应用,再把用户数据移到安装目录之外
 !macro NSIS_HOOK_PREUNINSTALL
+  !insertmacro KILL_RUNNING_APP
   IfFileExists "$INSTDIR\data\*.*" 0 +3
     CreateDirectory "${USERDATA_BACKUP}"
     Rename "$INSTDIR\data" "${USERDATA_BACKUP}\data"

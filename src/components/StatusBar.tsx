@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { useClipboardStore } from '../stores/clipboardStore';
 import { queryItems } from '../lib/db';
 import { ArrowUpIcon } from './icons';
@@ -16,8 +17,13 @@ export function StatusBar() {
   const isPaused = useClipboardStore((s) => s.isPaused);
   const [dbSize, setDbSize] = useState<number | null>(null);
   const [pasteMode, setPasteMode] = useState(false);
+  const [appVersion, setAppVersion] = useState('');
   const totalCount = items.length;
   const favoriteCount = useMemo(() => items.filter((i) => i.is_favorite).length, [items]);
+
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {});
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -69,6 +75,7 @@ export function StatusBar() {
         <span>共 {totalCount} 条</span>
         <span>{favoriteCount} 收藏</span>
         {dbSize !== null && <span>{formatSize(dbSize)}</span>}
+        {appVersion && <span>v{appVersion}</span>}
       </div>
       <div className="flex items-center gap-3">
         <button

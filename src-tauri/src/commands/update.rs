@@ -1,8 +1,61 @@
 use serde::Serialize;
 
-/// 版本信息文件地址:发版时把仓库根目录的 version.json 上传到任意
-/// 可公开访问的静态位置(GitHub raw / Gitee / 对象存储均可),并更新此常量。
+/// 版本信息文件主地址(GitHub raw)
 const VERSION_JSON_URL: &str = "https://raw.githubusercontent.com/QikiiL/Clipboard/master/version.json";
+/// 兜底镜像:jsdelivr 国内可达性较好;有约 12 小时缓存,最坏比 raw 晚半天看到新版本
+const VERSION_JSON_FALLBACK_URL: &str =
+    "https://cdn.jsdelivr.net/gh/QikiiL/Clipboard@master/version.json";
+
+/// 读取 Windows 系统代理(Clash/V2Ray 等工具写入的 WinINET 设置)。
+/// ureq 默认只认 HTTP_PROXY 环境变量、不读系统代理,而国内直连
+/// raw.githubusercontent.com 经常超时——有系统代理时优先走它
+fn system_http_proxy() -> Option<ureq::Proxy> {
+    use winreg::enums::HKEY_CURRENT_USER;
+    let key = winreg::RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Internet Settings")
+        .ok()?;
+    let enabled: u32 = key.get_value("ProxyEnable").ok()?;
+    if enabled == 0 {
+        return None;
+    }
+    let server: String = key.get_value("ProxyServer").ok()?;
+    // 逐协议形式("http=127.0.0.1:7890;https=127.0.0.1:7890")优先取 https 段
+    let server = if server.contains('=') {
+        server
+            .split(';')
+            .find_map(|part| part.strip_prefix("https="))
+            .or_else(|| server.split(';').find_map(|part| part.strip_prefix("http=")))
+            .map(|s| s.to_string())
+            .unwrap_or_default()
+    } else {
+        server
+    };
+    if server.is_empty() {
+        return None;
+    }
+    let url = if server.contains("://") {
+        server
+    } else {
+        format!("http://{}", server)
+    };
+    ureq::Proxy::new(&url).ok()
+}
+
+fn fetch_manifest(url: &str, proxy: Option<&ureq::Proxy>) -> Result<UpdateManifest, String> {
+    let mut builder = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(8));
+    if let Some(p) = proxy {
+        builder = builder.proxy(p.clone());
+    }
+    builder
+        .build()
+        .get(url)
+        .call()
+        .map_err(|e| format!("{}: {}", url, e))?
+        .into_json()
+        .map_err(|e| format!("解析版本信息失败: {}", e))
+}
 
 /// version.json 的结构:版本号 + 更新说明 + 两个手动下载页地址 + 蓝奏云密码
 #[derive(serde::Deserialize, Clone)]
@@ -54,12 +107,27 @@ pub async fn check_update(app: tauri::AppHandle) -> Result<UpdateInfo, String> {
         .unwrap_or_else(|| "0.0.0".to_string());
 
     tauri::async_runtime::spawn_blocking(move || -> Result<UpdateInfo, String> {
-        let manifest: UpdateManifest = ureq::get(VERSION_JSON_URL)
-            .timeout(std::time::Duration::from_secs(8))
-            .call()
-            .map_err(|e| format!("无法获取版本信息: {}", e))?
-            .into_json()
-            .map_err(|e| format!("解析版本信息失败: {}", e))?;
+        // 依次尝试:系统代理(若有) → 直连 → jsdelivr 镜像,第一个成功即用
+        let proxy = system_http_proxy();
+        let mut attempts: Vec<(&str, Option<&ureq::Proxy>)> = vec![(VERSION_JSON_URL, None)];
+        if let Some(p) = proxy.as_ref() {
+            attempts.insert(0, (VERSION_JSON_URL, Some(p)));
+        }
+        attempts.push((VERSION_JSON_FALLBACK_URL, proxy.as_ref()));
+
+        let mut last_err = String::new();
+        let mut manifest = None;
+        for (url, p) in attempts {
+            match fetch_manifest(url, p) {
+                Ok(m) => {
+                    manifest = Some(m);
+                    break;
+                }
+                Err(e) => last_err = e,
+            }
+        }
+        let manifest = manifest
+            .ok_or_else(|| format!("无法获取版本信息(代理/直连/镜像均失败): {}", last_err))?;
 
         Ok(UpdateInfo {
             has_update: version_tuple(&manifest.version) > version_tuple(&current),
