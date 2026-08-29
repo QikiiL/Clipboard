@@ -150,10 +150,68 @@ pub fn write_clipboard_text(text: String) -> Result<(), String> {
     cb.set_text(text).map_err(|e| e.to_string())
 }
 
+/// 允许打开的下载域名,按**注册域后缀**匹配而非硬编码完整域名:
+/// 蓝奏云有 lanzoul/lanzoui/lanzoux 等多个镜像域、且会随时切换,
+/// version.json 今后也可能改用别的 CDN,只锁注册域才能容忍子域变化
+const ALLOWED_DOWNLOAD_DOMAINS: &[&str] = &[
+    "github.com",
+    "jsdelivr.net",
+    "lanzoul.com",
+    "lanzoui.com",
+    "lanzoux.com",
+];
+
+/// 取出 URL 的主机部分:先去掉 scheme,截到第一个 `/` 得到 authority,
+/// 若含 userinfo 则取最后一个 `@` 之后的部分,再截掉 `:` 之后的端口。
+/// 不引入 url crate——这里只需要这几行,多一个依赖就多一份攻击面
+fn url_host(url: &str) -> Option<&str> {
+    let after_scheme = match url.split_once("://") {
+        Some((_, rest)) => rest,
+        None => url,
+    };
+    let authority = after_scheme.split('/').next()?;
+    let authority = match authority.rsplit_once('@') {
+        Some((_, host_port)) => host_port,
+        None => authority,
+    };
+    let host = authority.split(':').next()?;
+    if host.is_empty() {
+        None
+    } else {
+        Some(host)
+    }
+}
+
+/// 主机是否落在白名单内。规则必须是 `host == domain || host.ends_with(".{domain}")`,
+/// 少了那个点,`github.com.evil.com` 就会以"以 github.com 结尾"蒙混过关
+fn host_is_allowed(host: &str) -> bool {
+    let host = host.to_ascii_lowercase();
+    ALLOWED_DOWNLOAD_DOMAINS.iter().any(|domain| {
+        match host.strip_suffix(domain) {
+            Some(rest) => rest.is_empty() || rest.ends_with('.'),
+            None => false,
+        }
+    })
+}
+
 /// 在系统默认浏览器打开外部链接(更新下载页)
 #[tauri::command]
 pub fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
+    // 传入的 url 就是远程 version.json 里的 github/lanzou 字段,manifest
+    // 一旦被篡改就能把用户导向钓鱼下载页,所以这里强制 https + 域名白名单,
+    // 校验失败直接拒绝打开(而不是静默放行或降级处理)
+    let scheme = url
+        .split_once("://")
+        .map(|(s, _)| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    let host_allowed = url_host(&url).map(host_is_allowed).unwrap_or(false);
+    if scheme != "https" || !host_allowed {
+        return Err(format!(
+            "已拒绝打开该链接:仅允许 https 协议的官方下载域名({})",
+            ALLOWED_DOWNLOAD_DOMAINS.join("、")
+        ));
+    }
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(|e| e.to_string())

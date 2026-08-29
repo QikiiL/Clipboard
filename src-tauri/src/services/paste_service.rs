@@ -1,5 +1,6 @@
 use crate::models::clipboard_type::ClipboardType;
 use enigo::{Direction, Enigo, Key, Keyboard};
+use std::path::Path;
 use std::thread;
 use std::time::Duration;
 
@@ -45,8 +46,9 @@ fn write_text_if_changed(text: &str) -> Result<bool, String> {
     Ok(true)
 }
 
-/// 将图片写入剪切板
-fn write_image_to_clipboard(file_path: &str) -> Result<(), String> {
+/// 将图片写入剪切板。file_path 必须是经 storage_service::resolve_image_path
+/// 校验过的规范化绝对路径
+fn write_image_to_clipboard(file_path: &Path) -> Result<(), String> {
     let img = image::open(file_path).map_err(|e| format!("Failed to decode image: {}", e))?;
     let rgba = img.to_rgba8();
     let (width, height) = rgba.dimensions();
@@ -76,6 +78,7 @@ fn write_files_to_clipboard(paths: Vec<String>) -> Result<(), String> {
 /// 投递指定条目内容:按模式写入剪贴板,Paste 模式额外模拟 Ctrl+V。
 /// 调用前需先隐藏本应用窗口,确保按键落到目标应用上。
 pub async fn deliver_content(
+    app_handle: tauri::AppHandle,
     content: &str,
     item_type: i32,
     file_path: Option<&str>,
@@ -90,8 +93,13 @@ pub async fn deliver_content(
                 write_text_if_changed(&content)?
             }
             t if t == ClipboardType::Image as i32 => {
-                let path = file_path.as_deref().unwrap_or(&content);
-                write_image_to_clipboard(path)?;
+                let raw = file_path.as_deref().unwrap_or(&content);
+                // 图片路径来自数据库,必须先校验落在 images 目录内才打开,
+                // 与读取(get_image_base64)、删除(remove_image_file)一致;
+                // 校验失败直接报错,不能降级当文本处理,否则守卫形同虚设
+                let path = crate::services::storage_service::resolve_image_path(&app_handle, raw)
+                    .ok_or_else(|| "图片路径无效或不在应用图片目录内,已拒绝粘贴".to_string())?;
+                write_image_to_clipboard(&path)?;
                 true
             }
             t if t == ClipboardType::File as i32 => {

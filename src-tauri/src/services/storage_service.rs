@@ -74,6 +74,26 @@ pub fn images_dir(app: &tauri::AppHandle) -> PathBuf {
     current_data_dir(app).join("images")
 }
 
+/// 校验图片路径位于应用 images 目录内,返回规范化的绝对路径;越界或无法解析返回 None。
+/// 图片的 file_path 来自数据库条目,可能指向 images 之外的任意文件,
+/// 因此读取、删除、粘贴三条路径都必须先过这道校验,否则任一处的守卫缺口
+/// 就足以让被篡改的条目打开磁盘上的任意图片。
+///
+/// 注意:返回值仅供内部比较与打开使用,不要写入数据库或其它持久化位置——
+/// Windows 的 canonicalize 会带 `\\?\` 前缀(见 strip_extended_prefix)。
+pub fn resolve_image_path(app: &tauri::AppHandle, file_path: &str) -> Option<PathBuf> {
+    let images_dir = images_dir(app);
+    // 全新安装后 images 目录可能还没建过,先建再 canonicalize,否则校验恒失败
+    std::fs::create_dir_all(&images_dir).ok()?;
+    let canonical_images = std::fs::canonicalize(&images_dir).ok()?;
+    let canonical = std::fs::canonicalize(file_path).ok()?;
+    if canonical.starts_with(&canonical_images) {
+        Some(canonical)
+    } else {
+        None
+    }
+}
+
 /// 启动入口:解析数据目录;若存在待迁移项,在无连接状态下搬运,
 /// 任一步失败则回退旧目录(数据不动)。
 pub fn resolve_data_dir() -> PathBuf {

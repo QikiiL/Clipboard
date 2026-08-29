@@ -52,6 +52,7 @@ pub async fn activate_item(
     monitor.set_suppress(true).await;
 
     let result = crate::services::paste_service::deliver_content(
+        app_handle.clone(),
         &content,
         item_type,
         file_path.as_deref(),

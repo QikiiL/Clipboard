@@ -10,6 +10,9 @@ export interface AppSettings {
   close_behavior: CloseBehavior;
   win_v_integration: boolean;
   pinned: boolean;
+  excluded_apps: string[];
+  excluded_patterns: string[];
+  detect_sensitive: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -22,4 +25,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   close_behavior: 'ask',
   win_v_integration: false,
   pinned: true,
+  excluded_apps: ['keepass.exe', 'keepassxc.exe', '1password.exe', 'bitwarden.exe'],
+  excluded_patterns: [],
+  detect_sensitive: true,
 };

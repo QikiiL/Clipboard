@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
@@ -12,18 +12,45 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// 排除原因 → 状态栏文案
+const EXCLUSION_LABELS: Record<string, string> = {
+  app: '已排除:来源进程',
+  pattern: '已排除:匹配规则',
+  sensitive: '已排除:疑似密钥',
+};
+
 export function StatusBar() {
   const items = useClipboardStore((s) => s.items);
   const isPaused = useClipboardStore((s) => s.isPaused);
   const [dbSize, setDbSize] = useState<number | null>(null);
   const [pasteMode, setPasteMode] = useState(false);
   const [appVersion, setAppVersion] = useState('');
+  // 携带自增序号:连续排除同一原因时 state 值不变,不带序号的话
+  // React 不会重渲染,定时器也不会重置
+  const [excluded, setExcluded] = useState<{ reason: string; seq: number } | null>(null);
+  const excludeSeq = useRef(0);
   const totalCount = items.length;
   const favoriteCount = useMemo(() => items.filter((i) => i.is_favorite).length, [items]);
 
   useEffect(() => {
     getVersion().then(setAppVersion).catch(() => {});
   }, []);
+
+  // 排除规则命中时不入库,若不提示就成了静默丢数据——规则配得过宽时
+  // 用户会以为应用坏了,这里给一个短暂可见的提示
+  useEffect(() => {
+    const unlisten = listen<string>('item-excluded', (event) => {
+      excludeSeq.current += 1;
+      setExcluded({ reason: event.payload, seq: excludeSeq.current });
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  useEffect(() => {
+    if (!excluded) return;
+    const timer = setTimeout(() => setExcluded(null), 4000);
+    return () => clearTimeout(timer);
+  }, [excluded]);
 
   useEffect(() => {
     (async () => {
@@ -76,6 +103,14 @@ export function StatusBar() {
         <span>{favoriteCount} 收藏</span>
         {dbSize !== null && <span>{formatSize(dbSize)}</span>}
         {appVersion && <span>v{appVersion}</span>}
+        {excluded && (
+          <span
+            className="px-1.5 py-[1px] rounded-full bg-warn/20 text-warn-text"
+            title="命中排除规则,该内容未写入历史"
+          >
+            {EXCLUSION_LABELS[excluded.reason] ?? '已排除'}
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <button

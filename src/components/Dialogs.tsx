@@ -11,6 +11,7 @@ export function PromptDialog({
   initialValue = '',
   placeholder,
   confirmText = '确认',
+  maxLength = 30,
   onConfirm,
   onClose,
 }: {
@@ -19,6 +20,8 @@ export function PromptDialog({
   initialValue?: string;
   placeholder?: string;
   confirmText?: string;
+  /** 分组名之类的短文本用默认 30;排除正则可能更长,由调用方放宽 */
+  maxLength?: number;
   onConfirm: (value: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -56,7 +59,7 @@ export function PromptDialog({
             ref={inputRef}
             value={value}
             placeholder={placeholder}
-            maxLength={30}
+            maxLength={maxLength}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void submit()}
             className="w-full h-[33px] px-3 rounded-[10px] border border-hairline bg-app text-[13px] text-ink outline-none focus:border-accent transition-colors"
