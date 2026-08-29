@@ -1,11 +1,10 @@
 use crate::models::clipboard_type::ClipboardType;
-use crate::services::exclusion_service::{ExclusionReason, ExclusionState};
 use crate::utils::hash::{compute_hash, compute_hash_bytes};
 use arboard::Clipboard as ArboardClipboard;
 use image::RgbaImage;
 use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 use tokio::sync::Mutex;
 
 /// Fallback: read CF_DIB from the Windows clipboard directly and convert to RGBA.
@@ -82,26 +81,10 @@ fn detect_content_type(text: &str) -> i32 {
     }
 }
 
-/// 一次剪贴板抓取的结果
-struct CapturedContent {
-    content: String,
-    item_type: i32,
-    image_hash: Option<String>,
-    image_bytes: Option<Vec<u8>>,
-    width: usize,
-    height: usize,
-    /// 放置这段内容的来源进程名(小写);判定不了时为 None。
-    /// 必须在打开剪贴板之前取:剪贴板是独占资源,打开后 GetClipboardOwner 会失败
-    source_process: Option<String>,
-}
-
 /// Read clipboard content on a blocking thread.
-/// 返回 None 表示剪贴板为空或读取失败。
-fn read_clipboard_content() -> Option<CapturedContent> {
-    // 来源进程要在打开剪贴板之前取(打开后 GetClipboardOwner 拿不到 owner)。
-    // 这是阻塞式 Win32 调用,而本函数本就跑在 spawn_blocking 里
-    let source_process = crate::services::exclusion_service::source_process_name();
-
+/// Returns (content, item_type, image_hash, image_bytes, width, height) or None.
+fn read_clipboard_content() -> Option<(String, i32, Option<String>, Option<Vec<u8>>, usize, usize)>
+{
     // Try reading a file list (CF_HDROP) first — copied from Explorer.
     // The clipboard_win guard must be dropped before arboard calls below,
     // as both open the clipboard exclusively.
@@ -111,15 +94,8 @@ fn read_clipboard_content() -> Option<CapturedContent> {
         if clipboard_win::is_format_avail(CF_HDROP) {
             let files: Vec<String> = clipboard_win::get(clipboard_win::formats::FileList).ok()?;
             if !files.is_empty() {
-                return Some(CapturedContent {
-                    content: files.join("\n"),
-                    item_type: ClipboardType::File as i32,
-                    image_hash: None,
-                    image_bytes: None,
-                    width: 0,
-                    height: 0,
-                    source_process,
-                });
+                let content = files.join("\n");
+                return Some((content, ClipboardType::File as i32, None, None, 0, 0));
             }
         }
     }
@@ -133,29 +109,27 @@ fn read_clipboard_content() -> Option<CapturedContent> {
             let width = img.width;
             let height = img.height;
             let hash = compute_hash_bytes(&bytes);
-            return Some(CapturedContent {
-                content: "[图片]".to_string(),
-                item_type: ClipboardType::Image as i32,
-                image_hash: Some(hash),
-                image_bytes: Some(bytes),
+            return Some((
+                "[图片]".to_string(),
+                ClipboardType::Image as i32,
+                Some(hash),
+                Some(bytes),
                 width,
                 height,
-                source_process,
-            });
+            ));
         }
         Err(_) => {
             // Try DIB fallback (Windows-specific)
             if let Some((bytes, width, height)) = read_clipboard_dib_fallback() {
                 let hash = compute_hash_bytes(&bytes);
-                return Some(CapturedContent {
-                    content: "[图片]".to_string(),
-                    item_type: ClipboardType::Image as i32,
-                    image_hash: Some(hash),
-                    image_bytes: Some(bytes),
+                return Some((
+                    "[图片]".to_string(),
+                    ClipboardType::Image as i32,
+                    Some(hash),
+                    Some(bytes),
                     width,
                     height,
-                    source_process,
-                });
+                ));
             }
         }
     }
@@ -165,30 +139,12 @@ fn read_clipboard_content() -> Option<CapturedContent> {
         Ok(text) => {
             if !text.is_empty() {
                 let item_type = detect_content_type(&text);
-                Some(CapturedContent {
-                    content: text,
-                    item_type,
-                    image_hash: None,
-                    image_bytes: None,
-                    width: 0,
-                    height: 0,
-                    source_process,
-                })
+                Some((text, item_type, None, None, 0usize, 0usize))
             } else {
                 None
             }
         }
         Err(_) => None,
-    }
-}
-
-/// 排除原因的事件标识,供前端区分提示文案
-fn reason_str(reason: Option<ExclusionReason>) -> &'static str {
-    match reason {
-        Some(ExclusionReason::App) => "app",
-        Some(ExclusionReason::Pattern) => "pattern",
-        Some(ExclusionReason::Sensitive) => "sensitive",
-        None => "unknown",
     }
 }
 
@@ -266,10 +222,6 @@ impl ClipboardMonitor {
     pub fn start_polling(app_handle: tauri::AppHandle, db: SqlitePool, monitor: ClipboardMonitor) {
         let monitor = monitor.clone();
         tauri::async_runtime::spawn(async move {
-            // 规则状态在循环外取一次:state 内部是 Arc,持有它不会阻塞设置刷新,
-            // 也省掉每 500ms 一次的状态查找
-            let exclusion = app_handle.try_state::<ExclusionState>();
-
             // 启动捕获由下方轮询循环完成:tokio interval 的首次 tick 立即到期,
             // 与后续读取共用同一套去重/入库/发事件逻辑(独一份,避免双份维护),
             // 且首次捕获到新条目时也会发事件,前端首屏加载后能及时刷新出来
@@ -285,18 +237,11 @@ impl ClipboardMonitor {
                     .await
                     .unwrap_or(None);
 
-                let Some(captured) = clipboard_result else {
+                let Some((content, item_type, image_hash, image_bytes, img_width, img_height)) =
+                    clipboard_result
+                else {
                     continue;
                 };
-                let CapturedContent {
-                    content,
-                    item_type,
-                    image_hash,
-                    image_bytes,
-                    width: img_width,
-                    height: img_height,
-                    source_process,
-                } = captured;
 
                 let hash = if let Some(ih) = image_hash {
                     ih
@@ -315,21 +260,6 @@ impl ClipboardMonitor {
                 // Skip if suppress/paused changed during blocking read
                 if *monitor.suppress.lock().await || *monitor.paused.lock().await {
                     continue;
-                }
-
-                // 排除规则:命中则不入库,密码、密钥之类不落盘
-                if let Some(state) = &exclusion {
-                    let check = state.check(&content, item_type, source_process.as_deref());
-                    if check.excluded {
-                        // 也要把 hash 记进 last_hash:被排除的内容会一直留在系统
-                        // 剪贴板里,不记的话每 500ms 都要对同一份内容重跑一遍
-                        // 全部正则。代价是此后用户删掉该规则、再复制同一份内容
-                        // 时不会被记录(需先复制点别的把 last_hash 冲掉),
-                        // 属极边缘场景,接受
-                        *monitor.last_hash.lock().await = hash.clone();
-                        let _ = app_handle.emit("item-excluded", reason_str(check.reason));
-                        continue;
-                    }
                 }
 
                 let preview: String = content.chars().take(100).collect();

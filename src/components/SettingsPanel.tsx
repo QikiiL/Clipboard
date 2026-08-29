@@ -5,7 +5,6 @@ import { useClipboardStore } from '../stores/clipboardStore';
 import type { AppSettings } from '../types/settings';
 import { DEFAULT_SETTINGS } from '../types/settings';
 import { XIcon } from './icons';
-import { PromptDialog } from './Dialogs';
 import { parseUpdateNotes, type UpdateInfo } from './UpdateDialog';
 
 interface Props {
@@ -40,8 +39,6 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   const [updateResult, setUpdateResult] = useState<UpdateInfo | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [pwdCopied, setPwdCopied] = useState(false);
-  const [addingApp, setAddingApp] = useState(false);
-  const [addingPattern, setAddingPattern] = useState(false);
   // settingsRef 始终持有最新设置,避免回调闭包读到旧值
   const settingsRef = useRef<AppSettings>(DEFAULT_SETTINGS);
   // savedRef 持有最近一次已持久化的值,用于判断数字输入是否真的改了
@@ -477,124 +474,6 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
             </p>
           </div>
 
-          {/* 排除规则 */}
-          <div>
-            <span className="text-[12.5px] font-medium">排除规则</span>
-            <p className="text-[11px] text-faint mt-0.5">
-              命中的内容不写入历史,直接丢弃。密码管理器默认已列入
-            </p>
-
-            {/* 内置敏感识别开关 */}
-            <div className="flex items-center justify-between mt-2.5">
-              <span className="text-[12px] text-ink">自动识别密钥 / 卡号</span>
-              <button
-                onClick={() =>
-                  void saveNow({
-                    ...settingsRef.current,
-                    detect_sensitive: !settingsRef.current.detect_sensitive,
-                  })
-                }
-                role="switch"
-                aria-checked={settings.detect_sensitive}
-                aria-label="自动识别密钥与卡号"
-                className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 ${
-                  settings.detect_sensitive ? 'bg-accent' : 'bg-hairline'
-                }`}
-              >
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${
-                  settings.detect_sensitive ? 'translate-x-[15px]' : ''
-                }`} />
-              </button>
-            </div>
-            <p className="text-[11px] text-faint mt-1">
-              识别私钥、AWS / GitHub / Slack 等令牌、JWT、信用卡号(Luhn 校验)、身份证号
-            </p>
-
-            {/* 来源进程黑名单 */}
-            <div className="mt-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] text-ink">来源进程</span>
-                <button
-                  onClick={() => setAddingApp(true)}
-                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-app text-muted hover:bg-hairline transition-colors duration-150"
-                >
-                  添加
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {settings.excluded_apps.map((app) => (
-                  <span
-                    key={app}
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md bg-app border border-hairline text-muted"
-                  >
-                    <span className="font-mono">{app}</span>
-                    <button
-                      onClick={() =>
-                        void saveNow({
-                          ...settingsRef.current,
-                          excluded_apps: settings.excluded_apps.filter((a) => a !== app),
-                        })
-                      }
-                      className="text-faint hover:text-danger transition-colors"
-                      title="移除"
-                    >
-                      <XIcon size={11} />
-                    </button>
-                  </span>
-                ))}
-                {settings.excluded_apps.length === 0 && (
-                  <p className="text-[11px] text-faint">未设置,任何来源都会记录</p>
-                )}
-              </div>
-              <p className="text-[11px] text-faint mt-1">
-                填可执行文件名,如 keepass.exe。来源进程已退出时无法判定,该条不生效
-              </p>
-            </div>
-
-            {/* 自定义正则 */}
-            <div className="mt-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] text-ink">内容正则</span>
-                <button
-                  onClick={() => setAddingPattern(true)}
-                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-app text-muted hover:bg-hairline transition-colors duration-150"
-                >
-                  添加
-                </button>
-              </div>
-              <div className="mt-1.5 space-y-1">
-                {settings.excluded_patterns.map((pattern) => (
-                  <div
-                    key={pattern}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-app border border-hairline"
-                  >
-                    <span className="flex-1 min-w-0 text-[11px] font-mono text-muted truncate" title={pattern}>
-                      {pattern}
-                    </span>
-                    <button
-                      onClick={() =>
-                        void saveNow({
-                          ...settingsRef.current,
-                          excluded_patterns: settings.excluded_patterns.filter((p) => p !== pattern),
-                        })
-                      }
-                      className="flex-shrink-0 text-faint hover:text-danger transition-colors"
-                      title="移除"
-                    >
-                      <XIcon size={11} />
-                    </button>
-                  </div>
-                ))}
-                {settings.excluded_patterns.length === 0 && (
-                  <p className="text-[11px] text-faint">未设置。可填正则,如 内部机密</p>
-                )}
-              </div>
-              <p className="text-[11px] text-faint mt-1">
-                Rust 正则语法,匹配整段内容(文件类型按路径列表匹配)。语法错误会被跳过
-              </p>
-            </div>
-          </div>
-
           {/* 清空历史 */}
           <div className="flex items-center justify-between">
             <div>
@@ -767,59 +646,6 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
             </div>
           </div>
         </div>
-      )}
-
-      {/* 添加排除进程 */}
-      {addingApp && (
-        <PromptDialog
-          title="排除来源进程"
-          label="可执行文件名:"
-          placeholder="keepass.exe"
-          confirmText="添加"
-          onConfirm={async (name) => {
-            const value = name.trim().toLowerCase();
-            if (settingsRef.current.excluded_apps.includes(value)) {
-              throw new Error('该进程已在列表中');
-            }
-            await saveNow({
-              ...settingsRef.current,
-              excluded_apps: [...settingsRef.current.excluded_apps, value],
-            });
-            setAddingApp(false);
-          }}
-          onClose={() => setAddingApp(false)}
-        />
-      )}
-
-      {/* 添加排除正则 */}
-      {addingPattern && (
-        <PromptDialog
-          title="排除内容正则"
-          label="Rust 正则:"
-          placeholder="内部机密|机密文档"
-          confirmText="添加"
-          maxLength={200}
-          onConfirm={async (pattern) => {
-            // 先做一次尽力而为的前端预检,把括号不匹配之类的常见手误就地拦下。
-            // 注意 JS RegExp 与 Rust regex 语法并不等价(JS 支持前瞻、反向引用,
-            // Rust 不支持),因此这里通过不代表后端一定接受——最终仍以 Rust 侧
-            // 编译为准,编译失败的条目会被跳过并记日志,不会 panic
-            try {
-              new RegExp(pattern);
-            } catch (err) {
-              throw new Error('正则语法可能有误: ' + String(err));
-            }
-            if (settingsRef.current.excluded_patterns.includes(pattern)) {
-              throw new Error('该正则已在列表中');
-            }
-            await saveNow({
-              ...settingsRef.current,
-              excluded_patterns: [...settingsRef.current.excluded_patterns, pattern],
-            });
-            setAddingPattern(false);
-          }}
-          onClose={() => setAddingPattern(false)}
-        />
       )}
     </div>
   );

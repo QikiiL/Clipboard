@@ -1,6 +1,6 @@
 {
-  "version": "0.1.8",
-  "notes": "新增剪贴板排除规则:可按来源进程、自定义正则或内置敏感识别跳过入库\n密码管理器(KeePass / 1Password / Bitwarden 等)默认已拦截,密码不再落盘\n敏感识别支持信用卡号、身份证号、私钥、AWS/GitHub/Slack 令牌、JWT 等\n状态栏新增「已排除」提示,规则命中时可见,避免静默丢数据\n安全加固:移除未使用的 shell 插件、外部下载链接增加域名白名单、补齐粘贴图片的路径校验",
+  "version": "0.1.7",
+  "notes": "修复开机自启动后热键和托盘无法唤出窗口的问题\n窗口唤出增加自愈:坐标越界自动拉回主屏,创建卡死 30 秒后自动解锁",
   "github": "https://github.com/QikiiL/Clipboard/releases",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybcgdve",
   "lanzou_password": "ec4y"
