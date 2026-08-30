@@ -2,6 +2,6 @@
   "version": "0.1.8",
   "notes": "安全加固版本\n- 图片文件路径访问统一校验,防止路径穿越读取任意文件\n- 外部链接强制 HTTPS 并限制白名单域名\n- 移除未使用的内置 shell 插件,缩减攻击面",
   "github": "https://github.com/QikiiL/Clipboard/releases",
-  "lanzou": "https://wwbwp.lanzoul.com/b00ybcgdve",
-  "lanzou_password": "ec4y"
+  "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
+  "lanzou_password": "bdlx"
 }
