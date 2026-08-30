@@ -52,9 +52,13 @@ export function StatusBar() {
     return () => { unlisten.then((fn) => fn()); };
   }, []);
 
+  // 8 秒而非常见的 4 秒:这是用户唯一的补救机会。内容被排除时后端会把 hash
+  // 写进 last_hash,所以错过这轮后再复制同一份内容不会有任何反应(去重直接
+  // 跳过,提示条也不会再出现),得先复制点别的把 last_hash 冲掉才行 ——
+  // 这个门道用户不可能自己想到。既然提示条现在带可点击的操作,就得多留点时间
   useEffect(() => {
     if (!excluded) return;
-    const timer = setTimeout(() => setExcluded(null), 4000);
+    const timer = setTimeout(() => setExcluded(null), 8000);
     return () => clearTimeout(timer);
   }, [excluded]);
 
