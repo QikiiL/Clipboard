@@ -1,6 +1,6 @@
 {
-  "version": "0.1.7",
-  "notes": "修复开机自启动后热键和托盘无法唤出窗口的问题\n窗口唤出增加自愈:坐标越界自动拉回主屏,创建卡死 30 秒后自动解锁",
+  "version": "0.1.8",
+  "notes": "安全加固版本\n- 图片文件路径访问统一校验,防止路径穿越读取任意文件\n- 外部链接强制 HTTPS 并限制白名单域名\n- 移除未使用的内置 shell 插件,缩减攻击面",
   "github": "https://github.com/QikiiL/Clipboard/releases",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybcgdve",
   "lanzou_password": "ec4y"
