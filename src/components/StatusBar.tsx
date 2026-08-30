@@ -12,11 +12,12 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// 排除原因 → 状态栏文案
+// 排除原因 → 状态栏文案。用「未记录」而不是「已排除」:后者是内部术语,
+// 普通用户看不懂"排除"意味着什么,「未记录」直接说明结果
 const EXCLUSION_LABELS: Record<string, string> = {
-  app: '已排除:来源进程',
-  pattern: '已排除:匹配规则',
-  sensitive: '已排除:疑似密钥',
+  app: '未记录:来自黑名单软件',
+  pattern: '未记录:命中匹配规则',
+  sensitive: '未记录:疑似密钥或卡号',
 };
 
 export function StatusBar() {
@@ -128,12 +129,12 @@ export function StatusBar() {
         {excluded && (
           <span
             className="flex items-center gap-1.5 px-1.5 py-[1px] rounded-full bg-warn/20 text-warn-text"
-            title="命中排除规则,该内容未写入历史"
+            title="符合排除规则，这段内容没有保存到历史里"
           >
-            {EXCLUSION_LABELS[excluded.reason] ?? '已排除'}
+            {EXCLUSION_LABELS[excluded.reason] ?? '未记录'}
             <button
               onClick={handleKeepExcluded}
-              title="把这条内容记入历史,并加入豁免名单,以后不再排除"
+              title="把这段内容保存到历史，以后再复制它也不再拦截"
               className="px-1 rounded-full bg-warn/30 hover:bg-warn/50 transition-colors"
             >
               仍要记录

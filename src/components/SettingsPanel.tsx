@@ -485,7 +485,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
           <div className="border border-hairline rounded-[12px] bg-app px-3.5 py-3">
             <span className="text-[12.5px] font-medium">排除规则</span>
             <p className="text-[11px] text-faint mt-0.5">
-              命中的内容不写入历史,直接丢弃。密码管理器默认已列入
+              符合下面任一条件的内容都不会记录。密码管理器已默认加入
             </p>
 
             {/* 1. 内置敏感识别 */}
@@ -512,14 +512,14 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                 </button>
               </div>
               <p className="text-[11px] text-faint mt-1">
-                识别私钥、AWS / GitHub / Slack 等令牌、JWT、信用卡号(Luhn + IIN 校验)、身份证号
+                能认出常见的密钥、令牌、信用卡号和身份证号，认出来就不记录。偶尔会看走眼，万一误伤了，在窗口底部的提示条上点「仍要记录」就能找回来
               </p>
             </div>
 
             {/* 2. 来源进程黑名单 */}
             <div className="mt-3 pt-3 border-t border-hairline">
               <div className="flex items-center justify-between">
-                <span className="text-[12px] text-ink">来源进程</span>
+                <span className="text-[12px] text-ink">来源软件</span>
                 <button
                   onClick={() => setAddingApp(true)}
                   className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-surface text-muted hover:bg-hairline transition-colors duration-150"
@@ -549,18 +549,19 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                   </span>
                 ))}
                 {settings.excluded_apps.length === 0 && (
-                  <p className="text-[11px] text-faint">未设置,任何来源都会记录</p>
+                  <p className="text-[11px] text-faint">还没添加，所有软件复制的内容都会记录</p>
                 )}
               </div>
               <p className="text-[11px] text-faint mt-1">
-                填可执行文件名,如 keepass.exe。来源进程已退出时无法判定,该条不生效
+                填软件的文件名，例如 keepass.exe。从这个软件复制的内容一律不记录。
+                注意：如果复制完立刻把这个软件关了，就认不出是哪个软件了，这条规则会失效
               </p>
             </div>
 
             {/* 3. 自定义正则 */}
             <div className="mt-3 pt-3 border-t border-hairline">
               <div className="flex items-center justify-between">
-                <span className="text-[12px] text-ink">内容正则</span>
+                <span className="text-[12px] text-ink">内容匹配规则</span>
                 <button
                   onClick={() => setAddingPattern(true)}
                   className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-surface text-muted hover:bg-hairline transition-colors duration-150"
@@ -592,11 +593,11 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                   </div>
                 ))}
                 {settings.excluded_patterns.length === 0 && (
-                  <p className="text-[11px] text-faint">未设置。可填正则,如 内部机密</p>
+                  <p className="text-[11px] text-faint">还没添加。可以填一段文字，如：内部机密</p>
                 )}
               </div>
               <p className="text-[11px] text-faint mt-1">
-                Rust 正则语法,匹配整段内容(文件类型按路径列表匹配)。语法错误会被跳过
+                复制的内容里只要出现你设定的文字就不记录。可以直接写字（如：内部机密），也可以写带格式的规则（如：订单号[0-9]+ 表示「订单号」后面跟一串数字）。填错了不会报错，只会跳过这一条
               </p>
             </div>
 
@@ -616,8 +617,8 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
               </div>
               <p className="text-[11px] text-faint mt-1">
                 {allowlistCount === 0
-                  ? '暂无豁免。在「已排除」提示上点过「仍要记录」的内容会记在这里'
-                  : `已豁免 ${allowlistCount} 条,这些内容一律记录,不再判定排除规则`}
+                  ? '还没有豁免的内容。点过「仍要记录」的内容会出现在这里'
+                  : `已豁免 ${allowlistCount} 条，这些内容以后都会正常记录，不再拦截`}
               </p>
             </div>
           </div>
@@ -799,14 +800,14 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
       {/* 添加排除进程 */}
       {addingApp && (
         <PromptDialog
-          title="排除来源进程"
-          label="可执行文件名:"
+          title="添加来源软件"
+          label="软件的文件名，例如 keepass.exe："
           placeholder="keepass.exe"
           confirmText="添加"
           onConfirm={async (name) => {
             const value = name.trim().toLowerCase();
             if (settingsRef.current.excluded_apps.includes(value)) {
-              throw new Error('该进程已在列表中');
+              throw new Error('这个软件已经在列表里了');
             }
             await saveNow({
               ...settingsRef.current,
@@ -821,9 +822,9 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
       {/* 添加排除正则 */}
       {addingPattern && (
         <PromptDialog
-          title="排除内容正则"
-          label="Rust 正则:"
-          placeholder="内部机密|机密文档"
+          title="添加匹配规则"
+          label="内容里出现什么就不记录："
+          placeholder="内部机密"
           confirmText="添加"
           maxLength={200}
           onConfirm={async (pattern) => {
@@ -834,10 +835,10 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
             try {
               new RegExp(pattern);
             } catch (err) {
-              throw new Error('正则语法可能有误: ' + String(err));
+              throw new Error('这条规则可能写错了：' + String(err));
             }
             if (settingsRef.current.excluded_patterns.includes(pattern)) {
-              throw new Error('该正则已在列表中');
+              throw new Error('这条规则已经在列表里了');
             }
             await saveNow({
               ...settingsRef.current,
