@@ -134,7 +134,10 @@ export function StatusBar() {
           <span className="hidden sm:inline whitespace-nowrap">{formatSize(dbSize)}</span>
         )}
         {appVersion && (
-          <span className="hidden md:inline whitespace-nowrap">v{appVersion}</span>
+          // flex-shrink-0 保证版本号永远不被裁剪;不写 hidden md:inline
+          // 让它在任何宽度下都可见(版本号是短文本,不会显著挤占空间,
+          // 而且测试/调试时需要明确知道当前跑的是哪个版本)
+          <span className="whitespace-nowrap flex-shrink-0">v{appVersion}</span>
         )}
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
