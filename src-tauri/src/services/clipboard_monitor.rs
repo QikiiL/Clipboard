@@ -6,6 +6,7 @@ use image::RgbaImage;
 use sqlx::sqlite::SqlitePool;
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
+use tauri_plugin_notification::NotificationExt;
 use tokio::sync::Mutex;
 
 /// Fallback: read CF_DIB from the Windows clipboard directly and convert to RGBA.
@@ -357,6 +358,18 @@ impl ClipboardMonitor {
                                 hash: hash.clone(),
                             },
                         );
+                        // Windows 系统通知:仅在主窗口未获焦时发 —— 获焦时
+                        // 应用内已经弹了居中 toast,再发系统通知就是重复打扰
+                        if let Some(window) = app_handle.get_webview_window("main") {
+                            if !window.is_focused().unwrap_or(false) {
+                                let _ = app_handle
+                                    .notification()
+                                    .builder()
+                                    .title("剪贴板内容已拦截")
+                                    .body("可能复制到了密码、密钥或卡号，已自动丢弃。打开应用确认。")
+                                    .show();
+                            }
+                        }
                         continue;
                     }
                 }

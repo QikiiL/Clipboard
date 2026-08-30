@@ -15,6 +15,7 @@
     "global-shortcut:default",
     "sql:default",
     "store:default",
-    "core:tray:default"
+    "core:tray:default",
+    "notification:default"
   ]
 }

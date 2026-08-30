@@ -75,6 +75,9 @@ export function StatusBar() {
     }
   };
 
+  // 主动关闭(知道了按钮)
+  const handleDismissExcluded = () => setExcluded(null);
+
   useEffect(() => {
     (async () => {
       try {
@@ -126,21 +129,6 @@ export function StatusBar() {
         <span>{favoriteCount} 收藏</span>
         {dbSize !== null && <span>{formatSize(dbSize)}</span>}
         {appVersion && <span>v{appVersion}</span>}
-        {excluded && (
-          <span
-            className="flex items-center gap-1.5 px-1.5 py-[1px] rounded-full bg-warn/20 text-warn-text"
-            title="符合排除规则，这段内容没有保存到历史里"
-          >
-            {EXCLUSION_LABELS[excluded.reason] ?? '未记录'}
-            <button
-              onClick={handleKeepExcluded}
-              title="把这段内容保存到历史，以后再复制它也不再拦截"
-              className="px-1 rounded-full bg-warn/30 hover:bg-warn/50 transition-colors"
-            >
-              仍要记录
-            </button>
-          </span>
-        )}
       </div>
       <div className="flex items-center gap-3">
         <button
@@ -160,6 +148,43 @@ export function StatusBar() {
           <span>{isPaused ? '已暂停' : '监听中'}</span>
         </div>
       </div>
+
+      {/* 排除提示:屏幕中央的浮层,不再压住状态栏或列表。
+          外层 pointer-events-none 让背景仍可点;卡片本身 pointer-events-auto 让按钮可点。
+          8 秒自动消失,也可点"知道了"主动关闭 */}
+      {excluded && (
+        <div
+          className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center"
+          role="alertdialog"
+          aria-label="排除规则提示"
+        >
+          <div className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-warn flex-shrink-0" aria-hidden="true" />
+              <span className="text-[14px] font-semibold text-ink">
+                {EXCLUSION_LABELS[excluded.reason] ?? '未记录'}
+              </span>
+            </div>
+            <p className="text-[12.5px] text-faint text-center leading-relaxed">
+              这段内容符合排除规则,没有保存到历史里。如果是误判,可以点下面的按钮找回。
+            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <button
+                onClick={handleDismissExcluded}
+                className="h-[32px] px-4 text-[12.5px] rounded-[9px] text-muted hover:bg-hairline transition-colors duration-150"
+              >
+                知道了
+              </button>
+              <button
+                onClick={handleKeepExcluded}
+                className="h-[32px] px-4 text-[12.5px] rounded-[9px] bg-warn text-on-warn font-medium hover:bg-warn-deep transition-colors duration-150"
+              >
+                仍要记录
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
