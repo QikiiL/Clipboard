@@ -99,6 +99,17 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
     item.file_path ? fileSizeCache.get(item.file_path) ?? null : null
   );
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  // 跟随窗口尺寸:不挂到 state 上,用户缩窗时预览会停留在旧的 innerWidth
+  // 计算的位置,被窗口边缘切掉。resize 事件让它进入重渲染即可
+  const [viewport, setViewport] = useState(() => ({
+    w: window.innerWidth,
+    h: window.innerHeight,
+  }));
+  useEffect(() => {
+    const onResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   const groups = useClipboardStore((s) => s.groups);
 
@@ -148,8 +159,25 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
   }, [imageSrc, item.file_path, fileSize]);
 
   const renderImagePreview = () => {
-    const previewX = mousePos ? Math.min(mousePos.x + 16, window.innerWidth - 370) : 0;
-    const previewY = mousePos ? Math.max(mousePos.y - 150, 10) : 0;
+    // 预览元素尺寸(对应 CSS:max-w-[350px] + p-2 + border, max-h-[300px] + p-2 + border)
+    const PREVIEW_W = 370;
+    const PREVIEW_H = 340;
+    const GAP = 16;
+    // 边界判断:右侧 → 左侧 → 贴左;上方 → 贴底 → 贴顶。
+    // 必须四向都覆盖,否则窗口缩小或鼠标贴近边缘时预览会被窗口切掉
+    let previewX = 0;
+    let previewY = 0;
+    if (mousePos) {
+      previewX = mousePos.x + GAP;
+      if (previewX + PREVIEW_W > viewport.w) {
+        previewX = mousePos.x - GAP - PREVIEW_W;
+        if (previewX < 0) previewX = 0;
+      }
+      previewY = Math.max(mousePos.y - 150, 0);
+      if (previewY + PREVIEW_H > viewport.h) {
+        previewY = Math.max(0, viewport.h - PREVIEW_H);
+      }
+    }
 
     if (imageSrc && !imageFailed) {
       const metaParts = [
