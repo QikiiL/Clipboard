@@ -123,18 +123,25 @@ export function StatusBar() {
   }, []);
 
   return (
-    <div className="flex items-center justify-between h-9 px-4 border-t border-hairline text-[11px] text-faint tabular-nums">
-      <div className="flex items-center gap-3">
-        <span>共 {totalCount} 条</span>
-        <span>{favoriteCount} 收藏</span>
-        {dbSize !== null && <span>{formatSize(dbSize)}</span>}
-        {appVersion && <span>v{appVersion}</span>}
+    <div className="flex items-center justify-between h-9 px-4 border-t border-hairline text-[11px] text-faint tabular-nums gap-3">
+      {/* 左:统计。文本不换行(nowrap),容器 min-w-0+overflow-hidden
+          允许窗口极窄时被裁剪。dbSize/appVersion 是次要信息,窄屏隐藏。
+          右:粘贴模式+状态。flex-shrink-0 防止按钮被压成两行 */}
+      <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+        <span className="whitespace-nowrap">共 {totalCount} 条</span>
+        <span className="whitespace-nowrap">{favoriteCount} 收藏</span>
+        {dbSize !== null && (
+          <span className="hidden sm:inline whitespace-nowrap">{formatSize(dbSize)}</span>
+        )}
+        {appVersion && (
+          <span className="hidden md:inline whitespace-nowrap">v{appVersion}</span>
+        )}
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-shrink-0">
         <button
           onClick={handleTogglePasteMode}
           title="切换单击条目的行为(粘贴到之前点击的输入框 / 仅复制到剪贴板)"
-          className={`flex items-center gap-1.5 px-[11px] py-[3px] rounded-full transition-[background-color,color,box-shadow] duration-150 ${
+          className={`flex items-center gap-1.5 px-[11px] py-[3px] rounded-full transition-[background-color,color,box-shadow] duration-150 whitespace-nowrap ${
             pasteMode
               ? 'bg-accent-soft text-accent font-semibold ring-1 ring-inset ring-accent-ring'
               : 'bg-surface shadow-lift text-muted hover:shadow-lift-hover'
@@ -143,7 +150,7 @@ export function StatusBar() {
           {pasteMode && <ArrowUpIcon size={11} />}
           {pasteMode ? '单击粘贴' : '单击复制'}
         </button>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
           <span className={`w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-warn' : 'bg-ok'}`} title={isPaused ? '已暂停' : '监听中'} />
           <span>{isPaused ? '已暂停' : '监听中'}</span>
         </div>

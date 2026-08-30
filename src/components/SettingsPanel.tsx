@@ -299,7 +299,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-md mx-4 max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-5 pt-3.5 pb-3 border-b border-hairline">
+        <div className="flex items-center justify-between gap-3 px-5 pt-3.5 pb-3 border-b border-hairline">
           <h2 className="text-sm font-semibold">设置</h2>
           <button
             onClick={onClose}
@@ -311,7 +311,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
 
         <div className="px-5 py-2 space-y-4 overflow-y-auto">
           {/* 主题 */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-[12.5px] font-medium">深色模式</span>
             <button
               onClick={toggleTheme}
@@ -391,8 +391,8 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
           </div>
 
           {/* Win+V 替代系统剪贴板 */}
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <span className="text-[12.5px] font-medium">替代系统 Win+V</span>
               <p className="text-[11px] text-faint">禁用系统剪贴板历史,使用本应用替代</p>
             </div>
@@ -401,7 +401,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
               role="switch"
               aria-checked={winVEnabled}
               aria-label="Win+V 替代系统剪贴板"
-              className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 ${
+              className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 flex-shrink-0 ${
                 winVEnabled ? 'bg-accent' : 'bg-hairline'
               }`}
             >
@@ -417,7 +417,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
           )}
 
           {/* 开机自启 */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-[12.5px] font-medium">开机自启动</span>
             <button
               onClick={handleToggleAutostart}
@@ -435,7 +435,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
           </div>
 
           {/* 暂停监听 */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-[12.5px] font-medium">暂停监听</span>
             <button
               onClick={handleTogglePaused}
@@ -454,9 +454,9 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
 
           {/* 数据存储位置 */}
           <div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <span className="text-[12.5px] font-medium">数据存储位置</span>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-shrink-0">
                 {storageInfo && !storageInfo.is_default && (
                   <button
                     onClick={handleResetStorage}
@@ -490,7 +490,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
 
             {/* 1. 内置敏感识别 */}
             <div className="mt-3 pt-3 border-t border-hairline">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-[12px] text-ink">自动识别密钥 / 卡号</span>
                 <button
                   onClick={() =>
@@ -518,7 +518,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
 
             {/* 2. 来源进程黑名单 */}
             <div className="mt-3 pt-3 border-t border-hairline">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-[12px] text-ink">来源软件</span>
                 <button
                   onClick={() => setAddingApp(true)}
@@ -560,7 +560,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
 
             {/* 3. 自定义正则 */}
             <div className="mt-3 pt-3 border-t border-hairline">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-[12px] text-ink">内容匹配规则</span>
                 <button
                   onClick={() => setAddingPattern(true)}
@@ -603,7 +603,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
 
             {/* 4. 豁免名单 */}
             <div className="mt-3 pt-3 border-t border-hairline">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-[12px] text-ink">豁免名单</span>
                 <button
                   onClick={() =>
@@ -624,15 +624,15 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
           </div>
 
           {/* 清空历史 */}
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <span className="text-[12.5px] font-medium">清空剪贴板历史</span>
               <p className="text-[11px] text-faint">按时间范围清除未收藏的记录及图片,收藏保留</p>
             </div>
             <button
               onClick={() => setClearConfirmOpen(true)}
               disabled={clearing}
-              className={`h-[30px] px-4 text-[12px] rounded-[9px] border border-hairline transition-colors duration-150 ${
+              className={`h-[30px] px-4 text-[12px] rounded-[9px] border border-hairline transition-colors duration-150 flex-shrink-0 ${
                 clearing
                   ? 'bg-app text-faint cursor-not-allowed'
                   : 'bg-app text-danger hover:bg-hairline'
@@ -644,7 +644,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
 
           {/* 软件更新 */}
           <div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <span className="text-[12.5px] font-medium">软件更新</span>
               <button
                 onClick={handleCheckUpdate}
