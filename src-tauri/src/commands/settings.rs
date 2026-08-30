@@ -1,4 +1,5 @@
 use crate::models::settings::AppSettings;
+use tauri::Manager;
 
 #[tauri::command]
 pub fn load_settings(app_handle: tauri::AppHandle) -> Result<AppSettings, String> {
@@ -10,4 +11,41 @@ pub fn load_settings(app_handle: tauri::AppHandle) -> Result<AppSettings, String
 #[tauri::command]
 pub fn save_settings(app_handle: tauri::AppHandle, settings: AppSettings) -> Result<(), String> {
     crate::services::settings_service::save_settings(&app_handle, &settings)
+}
+
+/// 豁免条目上限。名单只增不减会随使用时间无限膨胀,而老条目几乎不会再被复制
+/// 到;超过上限时丢弃最早加入的(新条目追加在尾部,头部即最早)
+const ALLOWLIST_MAX: usize = 200;
+
+/// 用户点了「仍要记录」:把该内容加入豁免名单,并请求轮询线程重新捕获一次。
+///
+/// 这里不需要把内容再传一遍后端 —— 被排除的内容此刻仍留在系统剪贴板里,
+/// 只要清掉去重用的 last_hash,下一轮轮询(≤500ms)就会重新走入库流程。
+#[tauri::command]
+pub fn allow_excluded_item(app_handle: tauri::AppHandle, hash: String) -> Result<(), String> {
+    let hash = hash.trim().to_string();
+    if hash.is_empty() {
+        return Ok(());
+    }
+
+    let mut settings = crate::services::settings_service::load_settings(&app_handle);
+    if !settings.excluded_allowlist.contains(&hash) {
+        settings.excluded_allowlist.push(hash.clone());
+        if settings.excluded_allowlist.len() > ALLOWLIST_MAX {
+            let excess = settings.excluded_allowlist.len() - ALLOWLIST_MAX;
+            settings.excluded_allowlist.drain(..excess);
+        }
+        // save_settings 内部会 reload ExclusionState,白名单随后即刻生效
+        crate::services::settings_service::save_settings(&app_handle, &settings)?;
+    }
+
+    // 无论本次是否新增都请求重捕获:用户点按钮的意图是"把这条记进去",
+    // 已豁免却因去重未能入库的情况(例如应用刚重启)同样应该补上
+    if let Some(state) =
+        app_handle.try_state::<crate::services::exclusion_service::ExclusionState>()
+    {
+        state.request_recapture(hash);
+    }
+
+    Ok(())
 }

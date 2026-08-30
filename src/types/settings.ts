@@ -10,6 +10,11 @@ export interface AppSettings {
   close_behavior: CloseBehavior;
   win_v_integration: boolean;
   pinned: boolean;
+  excluded_apps: string[];
+  excluded_patterns: string[];
+  detect_sensitive: boolean;
+  // 误伤豁免:用户点过「仍要记录」的内容 hash
+  excluded_allowlist: string[];
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -22,4 +27,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   close_behavior: 'ask',
   win_v_integration: false,
   pinned: true,
+  excluded_apps: ['keepass.exe', 'keepassxc.exe', '1password.exe', 'bitwarden.exe'],
+  excluded_patterns: [],
+  detect_sensitive: true,
+  excluded_allowlist: [],
 };

@@ -29,11 +29,28 @@ pub struct AppSettings {
     pub win_v_integration: bool,
     #[serde(default = "default_pinned")]
     pub pinned: bool,
+    // 排除规则三件套,同样是为了兼容旧版 settings.json
+    #[serde(default)]
+    pub excluded_apps: Vec<String>,
+    #[serde(default)]
+    pub excluded_patterns: Vec<String>,
+    #[serde(default = "default_true")]
+    pub detect_sensitive: bool,
+    // 误伤豁免:用户在「已排除」提示上点过「仍要记录」的内容 hash。
+    // 没有它,被误判的内容永远进不了历史——再复制一次还是命中同一条规则
+    #[serde(default)]
+    pub excluded_allowlist: Vec<String>,
 }
 
 /// 窗口默认置顶;serde 的字段级 default 若不指定函数,bool 恒为 false,
 /// 老配置文件缺 pinned 字段时会退回 false,故显式指定
 fn default_pinned() -> bool {
+    true
+}
+
+/// 敏感识别默认开启;同 default_pinned 的理由——不指定函数时 bool 恒为 false,
+/// 等于给老用户静默关掉一个安全特性
+fn default_true() -> bool {
     true
 }
 
@@ -49,6 +66,17 @@ impl Default for AppSettings {
             close_behavior: CloseBehavior::default(),
             win_v_integration: false,
             pinned: true,
+            // 预置常见密码管理器:从密码管理器复制出来的密码是明文泄漏的头号
+            // 来源,默认拦掉比等用户自己发现设置项更稳妥
+            excluded_apps: vec![
+                "keepass.exe".to_string(),
+                "keepassxc.exe".to_string(),
+                "1password.exe".to_string(),
+                "bitwarden.exe".to_string(),
+            ],
+            excluded_patterns: Vec::new(),
+            detect_sensitive: true,
+            excluded_allowlist: Vec::new(),
         }
     }
 }

@@ -1,4 +1,5 @@
 use crate::models::settings::AppSettings;
+use tauri::Manager;
 use tauri_plugin_store::StoreExt;
 
 const STORE_FILE: &str = "settings.json";
@@ -82,6 +83,13 @@ pub fn save_settings(app_handle: &tauri::AppHandle, settings: &AppSettings) -> R
     let value = serde_json::to_value(settings).map_err(|e| e.to_string())?;
     store.set(STORE_KEY, value);
     store.save().map_err(|e| e.to_string())?;
+
+    // 排除规则改动立即生效(轮询线程读的是 ExclusionState,不是这份文件)。
+    // 刷新失败不能让保存失败:设置已落盘,规则最多等下次启动再加载
+    if let Some(state) = app_handle.try_state::<crate::services::exclusion_service::ExclusionState>()
+    {
+        state.reload(app_handle);
+    }
 
     // 同步自动启动状态（最佳努力，不影响设置保存）
     if settings.start_with_windows != previous.start_with_windows {
