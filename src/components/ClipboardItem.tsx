@@ -159,23 +159,35 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
   }, [imageSrc, item.file_path, fileSize]);
 
   const renderImagePreview = () => {
-    // 预览元素尺寸(对应 CSS:max-w-[350px] + p-2 + border, max-h-[300px] + p-2 + border)
-    const PREVIEW_W = 370;
-    const PREVIEW_H = 340;
+    // 设计尺寸:image 350x300 + 容器 18px(2*8 padding + 2*1 border)= 368x318。
+    // 窗口比这个尺寸还小时,按比例缩小预览,保证不超出可视范围
+    const DESIGN_W = 368;
+    const DESIGN_H = 318;
+    const MARGIN = 10; // 视口内边距,留出空隙
     const GAP = 16;
-    // 边界判断:右侧 → 左侧 → 贴左;上方 → 贴底 → 贴顶。
-    // 必须四向都覆盖,否则窗口缩小或鼠标贴近边缘时预览会被窗口切掉
+
+    // 可用空间 = 视口减边距;设下界避免极端情况下算出 0 或负数
+    const availW = Math.max(120, viewport.w - MARGIN * 2);
+    const availH = Math.max(120, viewport.h - MARGIN * 2);
+    // 取最小缩放比,且绝不放大(夹到 1)
+    const scale = Math.min(1, availW / DESIGN_W, availH / DESIGN_H);
+    const imgW = Math.round(350 * scale);
+    const imgH = Math.round(300 * scale);
+    const totalW = imgW + 18; // 容器加上 padding+border
+    const totalH = imgH + 18;
+
+    // 边界 clamp 用真实(缩放后)尺寸,而不是设计尺寸
     let previewX = 0;
     let previewY = 0;
     if (mousePos) {
       previewX = mousePos.x + GAP;
-      if (previewX + PREVIEW_W > viewport.w) {
-        previewX = mousePos.x - GAP - PREVIEW_W;
+      if (previewX + totalW > viewport.w) {
+        previewX = mousePos.x - GAP - totalW;
         if (previewX < 0) previewX = 0;
       }
       previewY = Math.max(mousePos.y - 150, 0);
-      if (previewY + PREVIEW_H > viewport.h) {
-        previewY = Math.max(0, viewport.h - PREVIEW_H);
+      if (previewY + totalH > viewport.h) {
+        previewY = Math.max(0, viewport.h - totalH);
       }
     }
 
@@ -217,7 +229,8 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
                 <img
                   src={imageSrc}
                   alt="[图片预览]"
-                  className="max-w-[350px] max-h-[300px] object-contain rounded"
+                  className="object-contain rounded"
+                  style={{ maxWidth: imgW, maxHeight: imgH }}
                 />
               </div>
             </div>
