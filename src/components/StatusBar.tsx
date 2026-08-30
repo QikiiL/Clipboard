@@ -151,11 +151,14 @@ export function StatusBar() {
 
       {/* 排除提示:屏幕中央的浮层,不再压住状态栏或列表。
           外层 pointer-events-none 让背景仍可点;卡片本身 pointer-events-auto 让按钮可点。
-          8 秒自动消失,也可点"知道了"主动关闭 */}
+          8 秒自动消失,也可点"知道了"主动关闭。
+          无障碍:用 role="status" + aria-live="polite" —— 非模态短暂通知的标准模式。
+          不要用 role="alertdialog"(那是模态对话框,会带焦点陷阱,跟这里的非模态行为不符) */}
       {excluded && (
         <div
           className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center"
-          role="alertdialog"
+          role="status"
+          aria-live="polite"
           aria-label="排除规则提示"
         >
           <div className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3">
