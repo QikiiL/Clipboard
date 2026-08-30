@@ -50,6 +50,10 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   const { theme, toggleTheme } = useTheme();
   const setPaused = useClipboardStore((s) => s.setPaused);
 
+  // 豁免名单条数。后端 AppSettings 对该字段带 serde default,
+  // 老配置文件读回来也是空数组,这里可以直接取 length
+  const allowlistCount = settings.excluded_allowlist.length;
+
   const applySettings = useCallback((next: AppSettings) => {
     settingsRef.current = next;
     setSettings(next);
@@ -591,6 +595,27 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
               </div>
               <p className="text-[11px] text-faint mt-1">
                 Rust 正则语法,匹配整段内容(文件类型按路径列表匹配)。语法错误会被跳过
+              </p>
+            </div>
+
+            {/* 豁免名单 */}
+            <div className="mt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-ink">豁免名单</span>
+                <button
+                  onClick={() =>
+                    void saveNow({ ...settingsRef.current, excluded_allowlist: [] })
+                  }
+                  disabled={allowlistCount === 0}
+                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-app text-muted hover:bg-hairline transition-colors duration-150 disabled:opacity-40 disabled:hover:bg-app disabled:cursor-not-allowed"
+                >
+                  清空
+                </button>
+              </div>
+              <p className="text-[11px] text-faint mt-1">
+                {allowlistCount === 0
+                  ? '暂无豁免。在「已排除」提示上点过「仍要记录」的内容会记在这里'
+                  : `已豁免 ${allowlistCount} 条,这些内容一律记录,不再判定排除规则`}
               </p>
             </div>
           </div>
