@@ -481,46 +481,48 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
             </p>
           </div>
 
-          {/* 排除规则 */}
-          <div>
+          {/* 排除规则 — 卡片区块,内部四个子项用细线分隔 */}
+          <div className="border border-hairline rounded-[12px] bg-app px-3.5 py-3">
             <span className="text-[12.5px] font-medium">排除规则</span>
             <p className="text-[11px] text-faint mt-0.5">
               命中的内容不写入历史,直接丢弃。密码管理器默认已列入
             </p>
 
-            {/* 内置敏感识别开关 */}
-            <div className="flex items-center justify-between mt-2.5">
-              <span className="text-[12px] text-ink">自动识别密钥 / 卡号</span>
-              <button
-                onClick={() =>
-                  void saveNow({
-                    ...settingsRef.current,
-                    detect_sensitive: !settingsRef.current.detect_sensitive,
-                  })
-                }
-                role="switch"
-                aria-checked={settings.detect_sensitive}
-                aria-label="自动识别密钥与卡号"
-                className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 ${
-                  settings.detect_sensitive ? 'bg-accent' : 'bg-hairline'
-                }`}
-              >
-                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${
-                  settings.detect_sensitive ? 'translate-x-[15px]' : ''
-                }`} />
-              </button>
+            {/* 1. 内置敏感识别 */}
+            <div className="mt-3 pt-3 border-t border-hairline">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-ink">自动识别密钥 / 卡号</span>
+                <button
+                  onClick={() =>
+                    void saveNow({
+                      ...settingsRef.current,
+                      detect_sensitive: !settingsRef.current.detect_sensitive,
+                    })
+                  }
+                  role="switch"
+                  aria-checked={settings.detect_sensitive}
+                  aria-label="自动识别密钥与卡号"
+                  className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 ${
+                    settings.detect_sensitive ? 'bg-accent' : 'bg-hairline'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${
+                    settings.detect_sensitive ? 'translate-x-[15px]' : ''
+                  }`} />
+                </button>
+              </div>
+              <p className="text-[11px] text-faint mt-1">
+                识别私钥、AWS / GitHub / Slack 等令牌、JWT、信用卡号(Luhn + IIN 校验)、身份证号
+              </p>
             </div>
-            <p className="text-[11px] text-faint mt-1">
-              识别私钥、AWS / GitHub / Slack 等令牌、JWT、信用卡号(Luhn 校验)、身份证号
-            </p>
 
-            {/* 来源进程黑名单 */}
-            <div className="mt-3">
+            {/* 2. 来源进程黑名单 */}
+            <div className="mt-3 pt-3 border-t border-hairline">
               <div className="flex items-center justify-between">
                 <span className="text-[12px] text-ink">来源进程</span>
                 <button
                   onClick={() => setAddingApp(true)}
-                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-app text-muted hover:bg-hairline transition-colors duration-150"
+                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-surface text-muted hover:bg-hairline transition-colors duration-150"
                 >
                   添加
                 </button>
@@ -529,7 +531,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                 {settings.excluded_apps.map((app) => (
                   <span
                     key={app}
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md bg-app border border-hairline text-muted"
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md bg-surface border border-hairline text-muted"
                   >
                     <span className="font-mono">{app}</span>
                     <button
@@ -555,13 +557,13 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
               </p>
             </div>
 
-            {/* 自定义正则 */}
-            <div className="mt-3">
+            {/* 3. 自定义正则 */}
+            <div className="mt-3 pt-3 border-t border-hairline">
               <div className="flex items-center justify-between">
                 <span className="text-[12px] text-ink">内容正则</span>
                 <button
                   onClick={() => setAddingPattern(true)}
-                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-app text-muted hover:bg-hairline transition-colors duration-150"
+                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-surface text-muted hover:bg-hairline transition-colors duration-150"
                 >
                   添加
                 </button>
@@ -570,7 +572,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                 {settings.excluded_patterns.map((pattern) => (
                   <div
                     key={pattern}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-app border border-hairline"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface border border-hairline"
                   >
                     <span className="flex-1 min-w-0 text-[11px] font-mono text-muted truncate" title={pattern}>
                       {pattern}
@@ -598,8 +600,8 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
               </p>
             </div>
 
-            {/* 豁免名单 */}
-            <div className="mt-3">
+            {/* 4. 豁免名单 */}
+            <div className="mt-3 pt-3 border-t border-hairline">
               <div className="flex items-center justify-between">
                 <span className="text-[12px] text-ink">豁免名单</span>
                 <button
@@ -607,7 +609,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                     void saveNow({ ...settingsRef.current, excluded_allowlist: [] })
                   }
                   disabled={allowlistCount === 0}
-                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-app text-muted hover:bg-hairline transition-colors duration-150 disabled:opacity-40 disabled:hover:bg-app disabled:cursor-not-allowed"
+                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-surface text-muted hover:bg-hairline transition-colors duration-150 disabled:opacity-40 disabled:hover:bg-surface disabled:cursor-not-allowed"
                 >
                   清空
                 </button>
