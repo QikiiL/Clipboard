@@ -180,7 +180,7 @@ export function StatusBar() {
               </button>
               <button
                 onClick={handleKeepExcluded}
-                className="h-[32px] px-4 text-[12.5px] rounded-[9px] bg-warn text-on-warn font-medium hover:bg-warn-deep transition-colors duration-150"
+                className="h-[32px] px-4 text-[12.5px] rounded-[9px] bg-accent-soft text-accent font-semibold ring-1 ring-inset ring-accent-ring hover:bg-accent hover:text-on-accent transition-colors duration-150"
               >
                 仍要记录
               </button>
