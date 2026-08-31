@@ -15,6 +15,8 @@ export interface AppSettings {
   detect_sensitive: boolean;
   // 误伤豁免:用户点过「仍要记录」的内容 hash
   excluded_allowlist: string[];
+  // 短信验证码自动捕获(默认关闭,开启需授予系统通知访问权限)
+  sms_code_enabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -31,4 +33,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   excluded_patterns: [],
   detect_sensitive: true,
   excluded_allowlist: [],
+  sms_code_enabled: false,
 };

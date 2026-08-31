@@ -19,6 +19,14 @@ interface StorageInfo {
   default_dir: string;
 }
 
+interface SmsCodeStatus {
+  enabled: boolean;
+  /** allowed / denied / unspecified / unsupported */
+  access: string;
+  last_capture: number;
+  capture_count: number;
+}
+
 // 清除范围选项:days 为 0 表示全部,>0 表示清除 N 天前(含更早)的记录
 const CLEAR_RANGES = [
   { days: 0, label: '全部' },
@@ -27,6 +35,15 @@ const CLEAR_RANGES = [
   { days: 7, label: '七天前' },
   { days: 3, label: '三天前' },
 ] as const;
+
+// Unix 秒 → 「14:32」时间文本;0 表示本次会话还没有捕获
+function formatCaptureTime(unix: number): string {
+  if (unix <= 0) return '刚开启';
+  return new Date(unix * 1000).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
 
 export function SettingsPanel({ isOpen, onClose }: Props) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -42,6 +59,8 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   const [pwdCopied, setPwdCopied] = useState(false);
   const [addingApp, setAddingApp] = useState(false);
   const [addingPattern, setAddingPattern] = useState(false);
+  // 短信验证码功能状态(权限/最近捕获),来自后端轮询
+  const [smsStatus, setSmsStatus] = useState<SmsCodeStatus | null>(null);
   // settingsRef 始终持有最新设置,避免回调闭包读到旧值
   const settingsRef = useRef<AppSettings>(DEFAULT_SETTINGS);
   // savedRef 持有最近一次已持久化的值,用于判断数字输入是否真的改了
@@ -78,6 +97,44 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
         .catch(console.error);
     }
   }, [isOpen, setPaused, applySettings]);
+
+  // 短信验证码状态:面板打开时加载,并每 3 秒刷新——用户被引导去
+  // 系统设置里授权,回来后状态行要能自动变成「已开启」,不需要手动刷新
+  const refreshSmsStatus = useCallback(() => {
+    invoke<SmsCodeStatus>('sms_code_status')
+      .then(setSmsStatus)
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    refreshSmsStatus();
+    const timer = setInterval(refreshSmsStatus, 3000);
+    return () => clearInterval(timer);
+  }, [isOpen, refreshSmsStatus]);
+
+  const handleToggleSmsCode = async () => {
+    const next = !settings.sms_code_enabled;
+    await saveNow({ ...settingsRef.current, sms_code_enabled: next });
+    if (next) {
+      // 打开时请求一次权限:非打包应用不弹系统对话框,这个调用的作用
+      // 是把本应用注册进系统设置的名单;真正放行仍需用户手动勾选
+      try {
+        await invoke<string>('sms_code_request_access');
+      } catch (err) {
+        console.error('Failed to request notification access:', err);
+      }
+      refreshSmsStatus();
+    }
+  };
+
+  const handleOpenNotificationSettings = async () => {
+    try {
+      await invoke('open_notification_settings');
+    } catch (err) {
+      console.error('Failed to open notification settings:', err);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -620,6 +677,68 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                   ? '还没有豁免的内容。点过「仍要记录」的内容会出现在这里'
                   : `已豁免 ${allowlistCount} 条，这些内容以后都会正常记录，不再拦截`}
               </p>
+            </div>
+          </div>
+
+          {/* 短信验证码 — 卡片区块 */}
+          <div className="border border-hairline rounded-[12px] bg-app px-3.5 py-3">
+            <span className="text-[12.5px] font-medium">短信验证码</span>
+            <p className="text-[11px] text-faint mt-0.5">
+              手机收到带验证码的短信时，自动把验证码复制到剪贴板，直接粘贴就能用。需要先在电脑的「手机连接」里配对手机
+            </p>
+
+            <div className="mt-3 pt-3 border-t border-hairline">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <span className="text-[12px] text-ink">自动复制验证码</span>
+                </div>
+                <button
+                  onClick={() => void handleToggleSmsCode()}
+                  role="switch"
+                  aria-checked={settings.sms_code_enabled}
+                  aria-label="自动复制短信验证码"
+                  className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 flex-shrink-0 ${
+                    settings.sms_code_enabled ? 'bg-accent' : 'bg-hairline'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${
+                    settings.sms_code_enabled ? 'translate-x-[15px]' : ''
+                  }`} />
+                </button>
+              </div>
+
+              {/* 权限状态行:3 秒自动刷新,用户去系统设置勾选后回来就能看到变化 */}
+              {settings.sms_code_enabled && smsStatus && (
+                <div className="mt-1.5 flex items-start justify-between gap-3">
+                  <p className="text-[11px] text-faint min-w-0 flex-1">
+                    {smsStatus.access === 'allowed' && (
+                      <>
+                        通知权限已开启
+                        {smsStatus.capture_count > 0 && (
+                          <>，本次已捕获 {smsStatus.capture_count} 个验证码（最近 {formatCaptureTime(smsStatus.last_capture)}）</>
+                        )}
+                      </>
+                    )}
+                    {smsStatus.access === 'unsupported' && '此系统版本不支持读取通知，功能不可用'}
+                    {(smsStatus.access === 'denied' || smsStatus.access === 'unspecified') && (
+                      <>还没获得读取通知的权限。点右边的按钮打开系统设置，在「允许应用访问通知」里勾选本应用（应用名 clipboard-manager-tauri）</>
+                    )}
+                  </p>
+                  {(smsStatus.access === 'denied' || smsStatus.access === 'unspecified') && (
+                    <button
+                      onClick={() => void handleOpenNotificationSettings()}
+                      className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-surface text-muted hover:bg-hairline transition-colors duration-150 flex-shrink-0"
+                    >
+                      打开系统设置
+                    </button>
+                  )}
+                </div>
+              )}
+              {!settings.sms_code_enabled && (
+                <p className="text-[11px] text-faint mt-1">
+                  打开后会请求读取 Windows 通知的权限。短信内容只在电脑本地处理，不会上传
+                </p>
+              )}
             </div>
           </div>
 

@@ -91,6 +91,9 @@ pub fn save_settings(app_handle: &tauri::AppHandle, settings: &AppSettings) -> R
         state.reload(app_handle);
     }
 
+    // 短信验证码开关:轮询线程读的是原子标志,这里同步翻转,即改即生效
+    crate::services::sms_code_service::set_enabled(settings.sms_code_enabled);
+
     // 同步自动启动状态（最佳努力，不影响设置保存）
     if settings.start_with_windows != previous.start_with_windows {
         let result = if settings.start_with_windows {

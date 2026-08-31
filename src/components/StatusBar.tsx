@@ -32,6 +32,11 @@ export function StatusBar() {
     null
   );
   const excludeSeq = useRef(0);
+  // 短信验证码捕获提示(同样带序号,理由同上)
+  const [smsCode, setSmsCode] = useState<{ code: string; sender: string; seq: number } | null>(
+    null
+  );
+  const smsSeq = useRef(0);
   const totalCount = items.length;
   const favoriteCount = useMemo(() => items.filter((i) => i.is_favorite).length, [items]);
 
@@ -74,6 +79,28 @@ export function StatusBar() {
       console.error('Failed to allow excluded item:', err);
     }
   };
+
+  // 短信验证码:后端捕获成功后发事件,这里弹居中提示。
+  // 后端已同时把验证码写进剪贴板(历史列表里也能翻到),提示只是告知
+  useEffect(() => {
+    const unlisten = listen<{ code: string; sender: string }>('sms-code-copied', (event) => {
+      smsSeq.current += 1;
+      setSmsCode({
+        code: event.payload.code,
+        sender: event.payload.sender,
+        seq: smsSeq.current,
+      });
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, []);
+
+  // 验证码提示 8 秒自动消失(可点「知道了」提前关闭)。
+  // 验证码有时效性,不需要像排除提示那样强调唯一补救机会,时长对齐即可
+  useEffect(() => {
+    if (!smsCode) return;
+    const timer = setTimeout(() => setSmsCode(null), 8000);
+    return () => clearTimeout(timer);
+  }, [smsCode]);
 
   // 主动关闭(知道了按钮)
   const handleDismissExcluded = () => setExcluded(null);
@@ -193,6 +220,36 @@ export function StatusBar() {
                 className="h-[32px] px-4 text-[12.5px] rounded-[9px] bg-accent-soft text-accent font-semibold ring-1 ring-inset ring-accent-ring hover:bg-accent hover:text-on-accent transition-colors duration-150"
               >
                 仍要记录
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 验证码已复制提示:与排除提示同款居中浮层,绿色圆点区分(这是
+          正面通知而非警告)。外层 pointer-events-none 背景仍可点 */}
+      {smsCode && (
+        <div
+          className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center"
+          role="status"
+          aria-live="polite"
+          aria-label="验证码已复制提示"
+        >
+          <div className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-ok flex-shrink-0" aria-hidden="true" />
+              <span className="text-[14px] font-semibold text-ink">验证码已复制</span>
+            </div>
+            <p className="text-[12.5px] text-faint text-center leading-relaxed">
+              来自 {smsCode.sender || '短信'} 的验证码{' '}
+              <span className="text-ink font-mono font-semibold">{smsCode.code}</span>{' '}
+              已写入剪贴板，直接粘贴即可
+            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <button
+                onClick={() => setSmsCode(null)}
+                className="h-[32px] px-4 text-[12.5px] rounded-[9px] text-muted hover:bg-hairline transition-colors duration-150"
+              >
+                知道了
               </button>
             </div>
           </div>

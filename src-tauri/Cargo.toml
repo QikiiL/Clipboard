@@ -43,4 +43,11 @@ windows-core = "0.61"
 windows = { version = "0.61", features = [
   "Win32_System_ProcessStatus",
   "Win32_System_Threading",
+  # 短信验证码捕获:读 Windows 通知中心(TeleLink 同款路径)。
+  # WinRT 类 API 无法用裸 #[link] 声明绕过,只能走 feature;
+  # 范围已压到最小(通知监听 + 通知内容 + 通知来源 App 信息 + 集合迭代)
+  "UI_Notifications",
+  "UI_Notifications_Management",
+  "ApplicationModel",
+  "Foundation_Collections",
 ] }

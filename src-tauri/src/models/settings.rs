@@ -40,6 +40,10 @@ pub struct AppSettings {
     // 没有它,被误判的内容永远进不了历史——再复制一次还是命中同一条规则
     #[serde(default)]
     pub excluded_allowlist: Vec<String>,
+    // 短信验证码自动捕获。默认关闭:开启需要用户去系统设置里授予
+    // 通知访问权限,由设置面板引导完成后再真正启用轮询
+    #[serde(default)]
+    pub sms_code_enabled: bool,
 }
 
 /// 窗口默认置顶;serde 的字段级 default 若不指定函数,bool 恒为 false,
@@ -77,6 +81,7 @@ impl Default for AppSettings {
             excluded_patterns: Vec::new(),
             detect_sensitive: true,
             excluded_allowlist: Vec::new(),
+            sms_code_enabled: false,
         }
     }
 }

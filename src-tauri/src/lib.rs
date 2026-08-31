@@ -199,6 +199,11 @@ pub fn run() {
                 monitor,
             );
 
+            // 短信验证码捕获:轮询通知中心(TeleLink 同款路径)。线程常驻,
+            // 靠 ENABLED 原子开关决定每轮是否真正读通知,关闭时零开销
+            services::sms_code_service::set_enabled(saved_settings.sms_code_enabled);
+            services::sms_code_service::spawn(app.handle().clone());
+
             // Register global hotkey and track it for unregistration.
             // If the user has a custom hotkey, register that instead of the default
             // Ctrl+Shift+V.
@@ -304,6 +309,9 @@ pub fn run() {
             commands::settings::save_settings,
             commands::settings::load_settings,
             commands::settings::allow_excluded_item,
+            commands::sms_code::sms_code_status,
+            commands::sms_code::sms_code_request_access,
+            commands::sms_code::open_notification_settings,
             commands::window::show_window,
             commands::window::register_hotkey,
             commands::window::hide_window,
