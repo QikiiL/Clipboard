@@ -186,73 +186,77 @@ export function StatusBar() {
         </div>
       </div>
 
-      {/* 排除提示:屏幕中央的浮层,不再压住状态栏或列表。
-          外层 pointer-events-none 让背景仍可点;卡片本身 pointer-events-auto 让按钮可点。
-          8 秒自动消失,也可点"知道了"主动关闭。
-          无障碍:用 role="status" + aria-live="polite" —— 非模态短暂通知的标准模式。
-          不要用 role="alertdialog"(那是模态对话框,会带焦点陷阱,跟这里的非模态行为不符) */}
-      {excluded && (
-        <div
-          className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center"
-          role="status"
-          aria-live="polite"
-          aria-label="排除规则提示"
-        >
-          <div className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-warn flex-shrink-0" aria-hidden="true" />
-              <span className="text-[14px] font-semibold text-ink">
-                {EXCLUSION_LABELS[excluded.reason] ?? '未记录'}
-              </span>
+      {/* 两类提示共用同一个居中容器 —— 这点很关键:若各自 fixed inset-0
+          居中,同时出现时两张卡片位置完全重合,后者会把前者盖掉(例如先
+          命中排除规则、8 秒内又收到验证码)。放进同一个 flex-col 容器,
+          它们就自动上下堆叠。
+          外层 pointer-events-none 让背景仍可点;卡片本身 pointer-events-auto
+          让按钮可点。8 秒自动消失,也可点"知道了"主动关闭。
+          无障碍:每张卡片各自 role="status" + aria-live="polite" ——
+          非模态短暂通知的标准模式。不要用 role="alertdialog"(那是模态
+          对话框,会带焦点陷阱,跟这里的非模态行为不符) */}
+      {(excluded || smsCode) && (
+        <div className="fixed inset-0 z-[9999] pointer-events-none flex flex-col items-center justify-center gap-3">
+          {excluded && (
+            <div
+              role="status"
+              aria-live="polite"
+              aria-label="排除规则提示"
+              className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3"
+            >
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-warn flex-shrink-0" aria-hidden="true" />
+                <span className="text-[14px] font-semibold text-ink">
+                  {EXCLUSION_LABELS[excluded.reason] ?? '未记录'}
+                </span>
+              </div>
+              <p className="text-[12.5px] text-faint text-center leading-relaxed">
+                这段内容符合排除规则,没有保存到历史里。如果是误判,可以点下面的按钮找回。
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  onClick={handleDismissExcluded}
+                  className="h-[32px] px-4 text-[12.5px] rounded-[9px] text-muted hover:bg-hairline transition-colors duration-150"
+                >
+                  知道了
+                </button>
+                <button
+                  onClick={handleKeepExcluded}
+                  className="h-[32px] px-4 text-[12.5px] rounded-[9px] bg-accent-soft text-accent font-semibold ring-1 ring-inset ring-accent-ring hover:bg-accent hover:text-on-accent transition-colors duration-150"
+                >
+                  仍要记录
+                </button>
+              </div>
             </div>
-            <p className="text-[12.5px] text-faint text-center leading-relaxed">
-              这段内容符合排除规则,没有保存到历史里。如果是误判,可以点下面的按钮找回。
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <button
-                onClick={handleDismissExcluded}
-                className="h-[32px] px-4 text-[12.5px] rounded-[9px] text-muted hover:bg-hairline transition-colors duration-150"
-              >
-                知道了
-              </button>
-              <button
-                onClick={handleKeepExcluded}
-                className="h-[32px] px-4 text-[12.5px] rounded-[9px] bg-accent-soft text-accent font-semibold ring-1 ring-inset ring-accent-ring hover:bg-accent hover:text-on-accent transition-colors duration-150"
-              >
-                仍要记录
-              </button>
+          )}
+          {/* 验证码已复制:与排除提示同款居中卡片,绿色圆点区分(这是
+              正面通知而非警告) */}
+          {smsCode && (
+            <div
+              role="status"
+              aria-live="polite"
+              aria-label="验证码已复制提示"
+              className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3"
+            >
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-ok flex-shrink-0" aria-hidden="true" />
+                <span className="text-[14px] font-semibold text-ink">验证码已复制</span>
+              </div>
+              <p className="text-[12.5px] text-faint text-center leading-relaxed">
+                来自 {smsCode.sender || '短信'} 的验证码{' '}
+                <span className="text-ink font-mono font-semibold">{smsCode.code}</span>{' '}
+                已写入剪贴板，直接粘贴即可
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  onClick={() => setSmsCode(null)}
+                  className="h-[32px] px-4 text-[12.5px] rounded-[9px] text-muted hover:bg-hairline transition-colors duration-150"
+                >
+                  知道了
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
-      {/* 验证码已复制提示:与排除提示同款居中浮层,绿色圆点区分(这是
-          正面通知而非警告)。外层 pointer-events-none 背景仍可点 */}
-      {smsCode && (
-        <div
-          className="fixed inset-0 z-[9999] pointer-events-none flex items-center justify-center"
-          role="status"
-          aria-live="polite"
-          aria-label="验证码已复制提示"
-        >
-          <div className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-ok flex-shrink-0" aria-hidden="true" />
-              <span className="text-[14px] font-semibold text-ink">验证码已复制</span>
-            </div>
-            <p className="text-[12.5px] text-faint text-center leading-relaxed">
-              来自 {smsCode.sender || '短信'} 的验证码{' '}
-              <span className="text-ink font-mono font-semibold">{smsCode.code}</span>{' '}
-              已写入剪贴板，直接粘贴即可
-            </p>
-            <div className="flex items-center gap-2 mt-1">
-              <button
-                onClick={() => setSmsCode(null)}
-                className="h-[32px] px-4 text-[12.5px] rounded-[9px] text-muted hover:bg-hairline transition-colors duration-150"
-              >
-                知道了
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>

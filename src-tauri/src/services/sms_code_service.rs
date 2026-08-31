@@ -194,11 +194,17 @@ fn extract_toast_texts(
 
     let mut parts: Vec<String> = Vec::new();
     for binding in bindings {
-        let elements = binding.GetTextElements().ok()?;
+        // 单个 binding 取不到文本只跳过它,不能因此丢掉整条通知 ——
+        // 一个坏 binding 就 return None 会静默漏掉真实验证码
+        let Ok(elements) = binding.GetTextElements() else {
+            continue;
+        };
         for element in elements {
             if let Ok(text) = element.Text() {
                 let text = text.to_string_lossy().trim().to_string();
-                if !text.is_empty() {
+                // 同一份 toast 若有多个 binding(不同尺寸的模板),文本会
+                // 重复出现;去重避免验证码被拼进正文两次
+                if !text.is_empty() && !parts.contains(&text) {
                     parts.push(text);
                 }
             }
@@ -321,6 +327,13 @@ pub fn extract_code(body: &str) -> Option<String> {
         if !(4..=8).contains(&len) {
             continue; // 11 位手机号 / 13-19 位卡号 / 3 位短号都不属于验证码
         }
+        // 8 位的 YYYYMMDD 日期不是验证码。这条必须有:merge_grouped_digits
+        // 会把「2026 08 31」拼成 20260831,而 8 位数字的得分门槛只要 5 分
+        // (长度 1 分 + 近距 4 分),「您的验证码将于 2026 08 31 过期」这种
+        // 短信里没有别的数字,日期会被当成验证码提走并覆盖剪贴板
+        if len == 8 && looks_like_date(&digits) {
+            continue;
+        }
         // 前文 3 个字符内的负向关键词 → 那是尾号不是验证码
         let prefix: String = chars[start.saturating_sub(3)..start].iter().collect();
         if NEGATIVE_PREFIXES.iter().any(|p| prefix.contains(p)) {
@@ -397,6 +410,22 @@ fn merge_grouped_digits(text: &str) -> String {
         }
     }
     out
+}
+
+/// 判断 8 位数字是否形如 YYYYMMDD 日期。
+///
+/// 只针对 8 位:6 位 YYMMDD 虽然也能构成日期,但 6 位是验证码最主流的
+/// 长度,为了排除一个低概率的日期误报而牺牲真实验证码,不划算 ——
+/// 而 8 位验证码本身就罕见,排除掉的代价几乎为零
+fn looks_like_date(digits: &str) -> bool {
+    let b = digits.as_bytes();
+    if b.len() != 8 || !b.iter().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    let year: u16 = digits[0..4].parse().unwrap_or(0);
+    let month: u8 = digits[4..6].parse().unwrap_or(0);
+    let day: u8 = digits[6..8].parse().unwrap_or(0);
+    (1900..=2100).contains(&year) && (1..=12).contains(&month) && (1..=31).contains(&day)
 }
 
 #[cfg(test)]
@@ -499,6 +528,34 @@ mod tests {
             extract_code("【支付宝】校验码:57 39 21,请勿泄露"),
             Some("573921".to_string())
         );
+    }
+
+    #[test]
+    fn test_grouped_date_not_code() {
+        // 分组日期被 merge 成 20260831 后长度合法、距离关键词也够近,
+        // 但它不是验证码 —— 提走它会覆盖用户正在复制的内容
+        assert_eq!(extract_code("【银行】您的验证码将于 2026 08 31 过期"), None);
+        assert_eq!(extract_code("验证码 2026-08-31 前有效,请尽快使用"), None);
+        assert_eq!(extract_code("【商家】您的优惠券验证码 20260831 已生成"), None);
+    }
+
+    #[test]
+    fn test_date_does_not_shadow_real_code() {
+        // 真验证码与日期同时出现时,应取真验证码(它离关键词更近,得分更高)
+        assert_eq!(
+            extract_code("【银行】验证码 483920,有效期至 2026-08-31"),
+            Some("483920".to_string())
+        );
+    }
+
+    #[test]
+    fn test_looks_like_date() {
+        assert!(looks_like_date("20260831"));
+        assert!(looks_like_date("19991231"));
+        assert!(!looks_like_date("20261331")); // 月份 13 非法
+        assert!(!looks_like_date("20260800")); // 日 00 非法
+        assert!(!looks_like_date("12345678")); // 年份不在 1900-2100
+        assert!(!looks_like_date("483920")); // 非 8 位直接不算
     }
 
     #[test]

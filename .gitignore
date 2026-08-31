@@ -33,6 +33,13 @@ src-tauri/target/
 # Build artifacts
 release-artifacts/
 
+# 安装包(NSIS / MSI 产物)。打包后复制到项目根目录,是发布时手工上传
+# GitHub Release 用的,不进仓库 —— 一个安装包动辄几十 MB,而且每次
+# 发版内容都不同。src-tauri/target/release/bundle/ 已被上面的 target/ 覆盖,
+# 这里挡的是复制到根目录的那份
+*.exe
+*.msi
+
 # Temporary API files
 .release-body.json
 .patch-resp.json
