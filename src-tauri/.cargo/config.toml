@@ -6,3 +6,30 @@ protocol = "sparse"
 # 仅作用于 gnu 目标,不影响 MSVC 工具链。
 [target.x86_64-pc-windows-gnu]
 rustflags = ["-C", "link-arg=-Wl,--exclude-all-symbols"]
+
+# Git Bash 自带的 /usr/bin/link(GNU coreutils) 在 PATH 里先于 MSVC,
+# 直接在任何 shell 跑 cargo 都可能命中错误的链接器。写死绝对路径绕开
+# PATH 解析,并用 /LIBPATH 显式补上 SDK/VC 库目录(rustc 不会自动探测
+# 自定义 D 盘安装),配合下方 [env] 实现"任何 shell 直接 cargo 无需 vcvars"。
+# 注意:VS/SDK 升级更换版本目录(14.51.36231 / 10.0.26100.0)后需同步更新。
+[target.x86_64-pc-windows-msvc]
+linker = "D:/Microsoft/VisualStudio/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/link.exe"
+rustflags = [
+  "-C", "link-arg=/LIBPATH:D:/Microsoft/VisualStudio/VC/Tools/MSVC/14.51.36231/lib/x64",
+  "-C", "link-arg=/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64",
+  "-C", "link-arg=/LIBPATH:C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64",
+]
+
+# cc 编译 C/C++ 源码(libsqlite3-sys 的 sqlite3.c、vswhom-sys 的 vswhom.cpp)
+# 需要 cl.exe/lib.exe 与头文件/库路径;自定义安装不在 vswhere/注册表默认
+# 探测范围内(vswhere -all 为空),必须显式提供。cc 按 target 三元组原名
+# 匹配环境变量(大小写敏感):C 编译读 CC_,C++ 编译读 CXX_,静态库读 AR_
+[env]
+CC_x86_64_pc_windows_msvc = "D:/Microsoft/VisualStudio/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe"
+CC_x86_64-pc-windows-msvc = "D:/Microsoft/VisualStudio/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe"
+CXX_x86_64_pc_windows_msvc = "D:/Microsoft/VisualStudio/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe"
+CXX_x86_64-pc-windows-msvc = "D:/Microsoft/VisualStudio/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe"
+AR_x86_64_pc_windows_msvc = "D:/Microsoft/VisualStudio/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/lib.exe"
+AR_x86_64-pc-windows-msvc = "D:/Microsoft/VisualStudio/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/lib.exe"
+INCLUDE = "D:/Microsoft/VisualStudio/VC/Tools/MSVC/14.51.36231/include;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/ucrt;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/um;C:/Program Files (x86)/Windows Kits/10/Include/10.0.26100.0/shared"
+LIB = "D:/Microsoft/VisualStudio/VC/Tools/MSVC/14.51.36231/lib/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64;C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/ucrt/x64"
