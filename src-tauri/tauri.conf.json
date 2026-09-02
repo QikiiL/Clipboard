@@ -7,6 +7,7 @@
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
+    "beforeBundleCommand": "copy /Y src-tauri/target/release/WebView2Loader.dll src-tauri/target/release/WebView2Loader-x86_64-pc-windows-gnu.dll",
     "frontendDist": "../dist"
   },
   "app": {
@@ -25,6 +26,9 @@
     "active": true,
     "targets": [
       "nsis"
+    ],
+    "externalBin": [
+      "WebView2Loader"
     ],
     "icon": [
       "icons/32x32.png",
