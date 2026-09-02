@@ -65,6 +65,8 @@ ${StrLoc}
 !define STARTMENUFOLDER "{{start_menu_folder}}"
 
 Var PassiveMode
+; 升级场景自动置位:旧版卸载+新版安装全自动,结束自动重启应用
+Var AutoRunApp
 Var UpdateMode
 Var NoShortcutMode
 Var WixMode
@@ -534,6 +536,19 @@ Function .onInit
     Call RestorePreviousInstallLocation
   ${EndIf}
 
+  ; ==== clipboard 项目定制:升级静默化(基于 tauri-v2.11.2 官方模板) ====
+  ; 检测到已安装旧版时自动切换被动模式:用户只需双击安装包一次(加一次
+  ; UAC),重装选择页、旧卸载器确认页全部跳过,卸载+安装+重启应用全自动。
+  ; 语言对话框因注册表已记住上次选择同样不会弹出。全新安装不受影响,
+  ; 仍走交互向导。
+  ${If} $PassiveMode = 0
+    ReadRegStr $R0 SHCTX "${UNINSTKEY}" "UninstallString"
+    ${If} $R0 != ""
+      StrCpy $PassiveMode 1
+      StrCpy $AutoRunApp 1
+    ${EndIf}
+  ${EndIf}
+  ; ==== 定制结束 ====
 
   !if "${INSTALLMODE}" == "both"
     !insertmacro MULTIUSER_INIT
@@ -767,6 +782,13 @@ Function .onInstSuccess
       ${GetOptions} $CMDLINE "/ARGS" $R0
       nsis_tauri_utils::RunAsUser "$INSTDIR\${MAINBINARYNAME}.exe" "$R0"
     ${EndIf}
+  ${EndIf}
+  ; clipboard 项目定制:升级静默安装完成后自动重启应用
+  ; (旧版运行中被关闭,新版理应原地接续)。用 Exec 而非模板的
+  ; RunAsUser:安装器已提权,子进程直接继承管理员令牌,
+  ; 应用启动不再触发额外 UAC(RunAsUser 是为普通应用降权设计的)
+  ${If} $AutoRunApp = 1
+    Exec '"$INSTDIR\${MAINBINARYNAME}.exe"'
   ${EndIf}
 FunctionEnd
 
