@@ -162,7 +162,7 @@ npm test            # 前端测试
 
 ## 发布新版本(维护者指南)
 
-1. 更新版本号,共 3 处必须一致:`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`(应用内更新检查和状态栏版本显示都读它们),然后运行 `build-release.bat` 打包
+1. 更新版本号,共 4 处必须一致:`package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`(应用内更新检查和状态栏版本显示都读它们),然后运行 `build-release.bat` 打包
 2. 编辑仓库根目录的 `version.json`(版本号、更新说明、GitHub 与蓝奏云下载页地址),推送到 GitHub 仓库(更新检查地址:`raw.githubusercontent.com/QikiiL/Clipboard/master/version.json`,见 `src-tauri/src/commands/update.rs`)
 3. 新安装包分别上传到 GitHub Releases 和蓝奏云——已装用户启动应用即收到更新提醒
 
