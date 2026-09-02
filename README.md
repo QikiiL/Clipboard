@@ -101,7 +101,7 @@ Windows 10/11 自带的剪贴板历史(`Win+V`)上限 25 条、不支持文件�
 
 ## 安装与使用
 
-- **安装版**:运行 `clipboard-setup.exe` 按引导完成(中文界面,默认安装到 `clipboard\` 文件夹)
+- **安装版**:运行 `clipboard-setup.exe` 按引导完成(中文界面,默认安装到 `%LOCALAPPDATA%\clipboard`,可选自定义路径);运行安装包会请求一次管理员权限(UAC),若火绒等安全软件弹出提示请选择允许
 - **便携版**:新建任意文件夹放入 `clipboard-manager-tauri.exe` 直接运行,`config/` 与 `data/` 自动生成在同目录
 - 首次使用建议:设置里开启"开机自启动"(最小化到托盘);想用 `Win+V` 唤出就打开"替代系统 Win+V"开关,一步完成接管
 
@@ -132,15 +132,19 @@ npm run tauri build # 产出 NSIS 安装包(需本机安装 NSIS)
 npm test            # 前端测试
 ```
 
-**工具链:用 GNU,不是 MSVC。** 项目按 `stable-x86_64-pc-windows-gnu` 构建,
-`src-tauri/.cargo/config.toml` 已包含 mingw 链接器配置。若环境里设了
-`RUSTUP_TOOLCHAIN` 指向 MSVC 会编译失败(本机未装 MSVC 构建工具)。
+**工具链:MSVC。** 本机 VS Build Tools 装在自定义位置 `D:\Microsoft\VisualStudio`
+(vswhere/注册表探测不到),因此 `src-tauri/.cargo/config.toml` 显式钉死了
+链接器、`/LIBPATH` 与 `CC_/CXX_/AR_`、`INCLUDE`/`LIB`——任何 shell 下直接
+`cargo check` / `cargo build` 即可,无需加载 vcvars64。VS 或 Windows SDK
+升级更换版本目录后,同步更新 config.toml 中的版本路径(MSVC 14.51.36231、
+SDK 10.0.26100.0)。
 
 | 脚本 | 用途 |
 | --- | --- |
-| `dev-gnu.bat` | 双击即可编译并打开应用。自动申请管理员权限(接管 `Win+V`、向管理员窗口粘贴都需要),并锁定 GNU 工具链。日常开发/自测用它 |
-| `build-release.bat` | 一键打包。注意它会先加载 MSVC 环境,但 Rust 侧仍走 rustup default(GNU),那句 `vcvars64` 是历史遗留 |
+| `dev.bat` / `dev-admin.bat` | 日常开发:加载环境并启动 `tauri dev`(admin 版以管理员运行,测试接管 `Win+V` 用) |
+| `build-release.bat` | 一键打包 NSIS 安装包并复制到项目根目录(自动取最新安装包,版本号升级无需改脚本) |
 | `measure-mem.ps1` | 后台内存占用测量 |
+| `dev-gnu.bat` | 历史遗留(GNU 工具链时代),现默认构建已回归 MSVC,不再推荐 |
 
 > **打包需要 [NSIS](https://nsis.sourceforge.io/)。** 没装的话 `tauri build` 会在最后的打包步骤失败,但 `src-tauri/target/release/clipboard-manager-tauri.exe` 已经生成——直接拷出来放进空文件夹就是便携版,首次运行会自动在同目录建立 `config/` 和 `data/`。
 
