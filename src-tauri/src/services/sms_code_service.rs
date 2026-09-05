@@ -122,7 +122,12 @@ pub fn spawn(app_handle: tauri::AppHandle) {
 
         // 订阅 NotificationChanged。回调跑在 WinRT 线程池线程上,只往通道
         // 发一个唤醒信号,不做任何实际工作(剪贴板/前端事件都由主循环处理);
-        // 回调绝不能 panic(跨 FFI 边界),send 失败同样静默忽略
+        // 回调绝不能 panic(跨 FFI 边界),send 失败同样静默忽略。
+        //
+        // ⚠️ 已知系统限制:无包身份(non-MSIX)的桌面应用订阅该事件必然报
+        // 0x80070490(ERROR_NOT_FOUND)——事件要求应用具有 MSIX 身份,
+        // 而轮询接口不需要。多个独立案例(Stack Overflow 74124560 等)确认。
+        // 所以除非将来给应用做稀疏 MSIX 身份,否则实际运行中总是走降级分支
         let (wake_tx, wake_rx) = mpsc::channel::<()>();
         let event_driven = match listener.NotificationChanged(&TypedEventHandler::new(
             move |_listener, _args| {
@@ -133,18 +138,19 @@ pub fn spawn(app_handle: tauri::AppHandle) {
             Ok(_) => true,
             Err(e) => {
                 eprintln!(
-                    "[sms-code] NotificationChanged 订阅失败,降级为 2s 纯轮询: {}",
+                    "[sms-code] NotificationChanged 订阅失败(无包身份应用的已知限制),降级为 1s 纯轮询: {}",
                     e
                 );
                 false
             }
         };
 
-        // 事件驱动时 5s 无信号兜底轮询一次;降级模式回到原 2s 纯轮询节奏
+        // 事件驱动时 5s 无信号兜底轮询一次;降级模式 1s 纯轮询
+        // (平均捕获延迟 ~0.5s;每次 poll 是一次轻量 COM 查询,1s 频率开销可忽略)
         let wait = if event_driven {
             Duration::from_secs(5)
         } else {
-            Duration::from_secs(2)
+            Duration::from_millis(1000)
         };
         // 上次 poll 失败的时刻,用于失败退避(至少隔 5s 再 poll)
         let mut last_error: Option<Instant> = None;
