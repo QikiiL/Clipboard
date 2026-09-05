@@ -2,8 +2,9 @@
 //!
 //! 实现方式(逆向调研 TeleLink 后采用的同款路径):
 //! 手机收到短信 → 「链接至 Windows」转发 → Phone Link 弹 Windows toast →
-//! 通知中心 → [本服务] UserNotificationListener 轮询 → 过滤出
-//! Phone Link 的通知 → 提取验证码 → 写剪贴板。
+//! 通知中心 → [本服务] UserNotificationListener 事件驱动捕获
+//! (NotificationChanged 唤醒 + 5 秒兜底轮询,捕获延迟从秒级降到
+//! 亚秒级)→ 过滤出 Phone Link 的通知 → 提取验证码 → 写剪贴板。
 //!
 //! 安卓与 iPhone 走同一条路径(都汇到 Phone Link 的 toast),无需手机侧
 //! 安装任何第三方 App,数据全程本地。
@@ -16,10 +17,12 @@
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
-use std::time::Duration;
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use tauri::Emitter;
 use tauri_plugin_notification::NotificationExt;
+use windows::Foundation::TypedEventHandler;
 use windows::UI::Notifications::Management::UserNotificationListener;
 use windows::UI::Notifications::Management::UserNotificationListenerAccessStatus;
 use windows::UI::Notifications::NotificationKinds;
@@ -90,8 +93,12 @@ pub fn request_access_blocking() -> String {
     }
 }
 
-/// 启动轮询线程。线程常驻,失败只记日志不崩溃——权限被用户在系统设置里
-/// 掐掉、OS 拒绝服务等都按「本轮拿不到」处理,下一轮重试
+/// 启动捕获线程。线程常驻,失败只记日志不崩溃——权限被用户在系统设置里
+/// 掐掉、OS 拒绝服务等都按「本轮拿不到」处理,稍后重试。
+///
+/// 事件驱动 + 兜底轮询:订阅 UserNotificationListener 的 NotificationChanged,
+/// 通知一到立即唤醒主循环(延迟亚秒级);5 秒无事件则兜底轮询一次,
+/// 防止事件丢失导致漏捕。事件订阅失败时降级为 2 秒纯轮询,功能不废
 pub fn spawn(app_handle: tauri::AppHandle) {
     let builder = std::thread::Builder::new().name("sms-code".into());
     let _ = builder.spawn(move || {
@@ -105,33 +112,81 @@ pub fn spawn(app_handle: tauri::AppHandle) {
         };
 
         let mut seen: SeenSet = HashSet::new();
-        let mut idle_rounds: u32 = 0;
+
+        // 先初始轮询播种已见集合,再订阅事件(顺序不能反):启动时通知中心里
+        // 已存在的旧 toast 会被记为已见,不会被误当新通知;反过来的话,
+        // 「订阅之后、播种之前」窗口期内的旧通知会触发唤醒并被重复处理
+        if let Err(e) = poll_once(&listener, &mut seen, &app_handle) {
+            eprintln!("[sms-code] 初始轮询失败(由兜底轮询稍后重试): {}", e);
+        }
+
+        // 订阅 NotificationChanged。回调跑在 WinRT 线程池线程上,只往通道
+        // 发一个唤醒信号,不做任何实际工作(剪贴板/前端事件都由主循环处理);
+        // 回调绝不能 panic(跨 FFI 边界),send 失败同样静默忽略
+        let (wake_tx, wake_rx) = mpsc::channel::<()>();
+        let event_driven = match listener.NotificationChanged(&TypedEventHandler::new(
+            move |_listener, _args| {
+                let _ = wake_tx.send(());
+                Ok(())
+            },
+        )) {
+            Ok(_) => true,
+            Err(e) => {
+                eprintln!(
+                    "[sms-code] NotificationChanged 订阅失败,降级为 2s 纯轮询: {}",
+                    e
+                );
+                false
+            }
+        };
+
+        // 事件驱动时 5s 无信号兜底轮询一次;降级模式回到原 2s 纯轮询节奏
+        let wait = if event_driven {
+            Duration::from_secs(5)
+        } else {
+            Duration::from_secs(2)
+        };
+        // 上次 poll 失败的时刻,用于失败退避(至少隔 5s 再 poll)
+        let mut last_error: Option<Instant> = None;
 
         loop {
-            let mut delay = Duration::from_secs(2);
-            if is_enabled() {
-                match poll_once(&listener, &mut seen, &app_handle) {
-                    Ok(hits) => {
-                        if hits > 0 {
-                            idle_rounds = 0;
-                        } else {
-                            idle_rounds += 1;
-                        }
-                    }
-                    Err(e) => {
-                        // 常见原因:权限被拒/被撤。退避到 5s,避免刷日志
-                        eprintln!("[sms-code] 轮询失败(权限或系统服务): {}", e);
-                        delay = Duration::from_secs(5);
-                    }
+            // 失败退避:距上次失败不足 5 秒就先补足等待,避免权限被拒时
+            // 每次唤醒都发起注定失败的 WinRT 调用刷日志。只在循环开头短暂
+            // sleep、不占用 recv——退避期间到达的唤醒信号留在通道里,
+            // 退避结束立刻被处理,不会堆积延迟
+            if let Some(t) = last_error {
+                let remain = Duration::from_secs(5).saturating_sub(t.elapsed());
+                if !remain.is_zero() {
+                    std::thread::sleep(remain);
                 }
-            } else {
-                idle_rounds += 1;
             }
-            // 空闲退避:连续无收获时拉长间隔,与 TeleLink 一致(2s → 4s)
-            if idle_rounds > 3 {
-                delay = delay.max(Duration::from_secs(4));
+
+            match wake_rx.recv_timeout(wait) {
+                Ok(()) => {
+                    // 突发合并:一条短信可能连弹多条 toast,先让它们到齐,
+                    // 再排空通道里积压的信号,合并成一次 poll
+                    std::thread::sleep(Duration::from_millis(250));
+                    while wake_rx.try_recv().is_ok() {}
+                }
+                // 兜底轮询 / 降级纯轮询:超时也往下走一轮
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                // wake_tx 在事件回调闭包里、随 listener 常驻,不会 drop;
+                // 真发生时按兜底节奏继续纯轮询,保持线程存活
+                Err(mpsc::RecvTimeoutError::Disconnected) => {}
             }
-            std::thread::sleep(delay);
+
+            // 总开关关闭:零 WinRT 调用,直接等下一个信号/超时
+            if !is_enabled() {
+                continue;
+            }
+
+            match poll_once(&listener, &mut seen, &app_handle) {
+                Ok(_) => last_error = None,
+                Err(e) => {
+                    eprintln!("[sms-code] 轮询失败(权限或系统服务): {}", e);
+                    last_error = Some(Instant::now());
+                }
+            }
         }
     });
 }
