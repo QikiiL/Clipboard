@@ -38,7 +38,7 @@ fn out(msg: &str) {
 
 // 探针是独立 crate,且按约束不动 lib.rs;identity.rs 仅依赖 windows crate、
 // 无 crate 内部引用,故直接内联复用其实现(与 lib 内 services::identity 同源)。
-#[path = "../services/identity.rs"]
+#[path = "../src/services/identity.rs"]
 mod identity;
 
 /// 尝试订阅一次 NotificationChanged。成功返回 Ok,失败返回 HRESULT 字符串

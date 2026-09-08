@@ -3,6 +3,7 @@
   "productName": "clipboard",
   "version": "0.2.1",
   "identifier": "com.lyz.clipboard-manager-tauri",
+  "mainBinaryName": "clipboard-manager-tauri",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
