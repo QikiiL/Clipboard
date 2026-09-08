@@ -137,7 +137,11 @@ pub fn spawn(app_handle: tauri::AppHandle) {
         // 失败的 handler 随闭包一并 drop(其中的 wake_tx 也 drop),rx 弃用,
         // 下次重试会新建 channel,因此封装成「订阅一次并返回 rx」的函数。
         let (wake_rx, event_driven) = match subscribe_event(&listener) {
-            Ok(rx) => (rx, true),
+            Ok(rx) => {
+                // 订阅直接成功:身份可用,清除自动重启冷却标记
+                identity::clear_relaunch_marker();
+                (rx, true)
+            }
             Err(e) => {
                 eprintln!(
                     "[sms-code] NotificationChanged 订阅失败(无包身份应用的已知限制),尝试注册稀疏包身份: {}",
@@ -147,33 +151,48 @@ pub fn spawn(app_handle: tauri::AppHandle) {
                     Ok(()) => match subscribe_event(&listener) {
                         Ok(rx) => {
                             eprintln!("[sms-code] 注册稀疏包身份后事件订阅成功,事件驱动已启用");
+                            // 身份确认可用:清除自动重启冷却标记,
+                            // 之后每次直接启动 exe 都允许一次自动重启
+                            identity::clear_relaunch_marker();
                             (rx, true)
                         }
                         Err(e2) => {
                             // 注册成功但当前进程无身份(身份在进程创建时确定)。
                             // 补救:经 Shell 以包 AUMID 重新激活应用 —— 新进程出生
-                            // 即带稀疏包身份,事件驱动直接可用。每次直接启动 exe
-                            // (自启动任务/桌面快捷方式)都会走一遍这个自动重启,
-                            // 只发生一次(新进程有身份,不会再进此分支)
+                            // 即带稀疏包身份,事件驱动直接可用。
+                            // 两道防线防死循环:
+                            // 1. 先强制重注册过期身份(版本/内容不一致时);
+                            // 2. 60 秒冷却标记:身份始终拿不到(环境问题)时,
+                            //    最多每分钟自动重启一次,而不是无限循环
                             eprintln!(
                                 "[sms-code] 稀疏包身份已注册,但当前进程无身份;尝试以包身份重新激活应用: {e2}"
                             );
                             if !identity::has_identity() {
-                                match identity::relaunch_self_via_identity() {
-                                    Ok(()) => {
-                                        eprintln!(
-                                            "[sms-code] 已以包身份重新激活应用,当前进程退出"
-                                        );
-                                        // 给新进程留出启动时间再退出,避免托盘/单例空窗
-                                        std::thread::sleep(Duration::from_millis(500));
-                                        app_handle.exit(0);
-                                        return;
+                                if let Err(re) = identity::reregister_if_stale() {
+                                    eprintln!("[sms-code] 稀疏包过期重注册失败(忽略,继续重启流程): {re}");
+                                }
+                                if identity::relaunch_allowed() {
+                                    identity::mark_relaunch();
+                                    match identity::relaunch_self_via_identity() {
+                                        Ok(()) => {
+                                            eprintln!(
+                                                "[sms-code] 已以包身份重新激活应用,当前进程退出"
+                                            );
+                                            // 给新进程留出启动时间再退出,避免托盘/单例空窗
+                                            std::thread::sleep(Duration::from_millis(500));
+                                            app_handle.exit(0);
+                                            return;
+                                        }
+                                        Err(re) => {
+                                            eprintln!(
+                                                "[sms-code] 以包身份重新激活失败({re}),降级为 1s 轮询"
+                                            );
+                                        }
                                     }
-                                    Err(re) => {
-                                        eprintln!(
-                                            "[sms-code] 以包身份重新激活失败({re}),降级为 1s 轮询"
-                                        );
-                                    }
+                                } else {
+                                    eprintln!(
+                                        "[sms-code] 距上次自动重启不足冷却期,本轮放弃重启,降级为 1s 轮询"
+                                    );
                                 }
                             }
                             (mpsc::channel::<()>().1, false)

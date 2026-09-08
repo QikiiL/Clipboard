@@ -24,6 +24,7 @@
 //! 只保证失败一律返回 Err、由调用方降级。
 
 use std::path::PathBuf;
+use std::time::Duration;
 
 use windows::core::HSTRING;
 use windows::Foundation::Uri;
@@ -139,6 +140,114 @@ fn is_registered() -> bool {
     };
     // IIterable<Package> 实现了 IntoIterator;有任何一项即已注册
     packages.into_iter().next().is_some()
+}
+
+/// 已注册稀疏包的版本,与 AppxManifest.xml 中的 Version 保持一致
+/// (改清单版本时必须同步改这里,否则会被误判为「过期」而反复重装)。
+/// 四元组含 Revision:仅比 (Major,Minor,Build) 无法区分内容过期但版本
+/// 三元组相同的注册(实测踩过:0.2.1.2 与 0.2.1.3 前三位相同)。
+const EXPECTED_IDENTITY_VERSION: (u64, u64, u64, u64) = (0, 2, 1, 3);
+
+/// 已注册的稀疏包版本是否与 EXPECTED_IDENTITY_VERSION 完全一致。
+/// 不一致(含「清单元数据里 Executable 指向旧 exe」的场景,版本相同但内容过期)
+/// 时返回 false,调用方应强制重注册 —— 否则旧注册会让新进程拿不到身份,
+/// 触发「无身份 → 重启」死循环。
+fn registered_version_matches() -> bool {
+    let Ok(pm) = PackageManager::new() else {
+        return false;
+    };
+    let Ok(packages) = pm.FindPackagesByNamePublisher(
+        &HSTRING::from(PACKAGE_NAME),
+        &HSTRING::from(PACKAGE_PUBLISHER),
+    ) else {
+        return false;
+    };
+    let Some(pkg) = packages.into_iter().next() else {
+        return false;
+    };
+    let Ok(ver) = pkg.Id().and_then(|id| id.Version()) else {
+        return false;
+    };
+    (
+        ver.Major as u64,
+        ver.Minor as u64,
+        ver.Build as u64,
+        ver.Revision as u64,
+    ) == EXPECTED_IDENTITY_VERSION
+}
+
+/// 强制重注册:移除同名包后按当前 msix 重新注册。
+/// 用于「已注册但内容过期」的场景(例如测试期改过清单 Executable)。
+fn force_reregister(msix: &std::path::Path, external_loc: &std::path::Path) -> Result<(), String> {
+    let pm = PackageManager::new().map_err(|e| format!("PackageManager::new 失败: {e}"))?;
+    let Ok(packages) = pm.FindPackagesByNamePublisher(
+        &HSTRING::from(PACKAGE_NAME),
+        &HSTRING::from(PACKAGE_PUBLISHER),
+    ) else {
+        return Err("FindPackagesByNamePublisher 失败".to_string());
+    };
+    for pkg in packages {
+        if let Ok(full_name) = pkg.Id().and_then(|id| id.FullName()) {
+            let _ = pm.RemovePackageAsync(&full_name);
+        }
+    }
+    register(msix, external_loc)
+        .map(|_| ())
+        .map_err(|(code, msg)| format!("重注册失败 {:#010X}: {}", code, msg))
+}
+
+/// 订阅重试仍失败时的兜底:确认「已注册的稀疏包版本与当前清单一致」,
+/// 不一致(过期)就强制重注册,然后调用方再尝试以 AUMID 重启应用。
+pub fn reregister_if_stale() -> Result<(), String> {
+    let msix = find_msix().ok_or_else(|| "找不到 clipboard-identity.msix".to_string())?;
+    let exe_dir = exe_dir().ok_or_else(|| "取不到当前 exe 所在目录".to_string())?;
+    if registered_version_matches() {
+        return Ok(());
+    }
+    force_reregister(&msix, &exe_dir)
+}
+
+// ---------------------------------------------------------------------------
+// 重启冷却:防止「无身份 → 自动重启」无限循环(环境原因导致身份始终拿不到时,
+// 例如签名证书被清理、清单与安装目录错位)。60 秒内最多自动重启一次;
+// 事件订阅成功后清除标记,后续启动恢复立即可重启。
+// ---------------------------------------------------------------------------
+
+const RELAUNCH_MARKER: &str = "clipboard-identity-relaunch.marker";
+const RELAUNCH_COOLDOWN: Duration = Duration::from_secs(60);
+
+fn marker_path() -> PathBuf {
+    std::env::temp_dir().join(RELAUNCH_MARKER)
+}
+
+/// 距上次自动重启是否已过冷却期
+pub fn relaunch_allowed() -> bool {
+    match std::fs::metadata(marker_path()) {
+        Ok(m) => {
+            let Ok(modified) = m.modified() else {
+                return true;
+            };
+            modified
+                .elapsed()
+                .map(|e| e >= RELAUNCH_COOLDOWN)
+                .unwrap_or(true)
+        }
+        Err(_) => true, // 标记不存在:从未重启过或已被清除
+    }
+}
+
+/// 记录一次自动重启(冷却期起点)
+pub fn mark_relaunch() {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let _ = std::fs::write(marker_path(), ts.to_string());
+}
+
+/// 事件订阅成功后清除标记(身份确认可用,下次启动允许自动重启)
+pub fn clear_relaunch_marker() {
+    let _ = std::fs::remove_file(marker_path());
 }
 
 /// 注册稀疏包。成功返回 `Ok(())`;失败返回 `(HRESULT 低 32 位, 原因)`(code 为 0
