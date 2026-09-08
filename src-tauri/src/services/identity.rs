@@ -1,0 +1,310 @@
+//! 稀疏 MSIX 包身份(松散外部位置打包,sparse / loosely-provisioned package)。
+//!
+//! 给非打包的 Win32 桌面应用补上 MSIX 包身份,从而能订阅
+//! `UserNotificationListener::NotificationChanged` —— 无包身份时该订阅必报
+//! `0x80070490`(ERROR_NOT_FOUND),轮询接口则不受影响(现状降级为 1s 轮询)。
+//!
+//! 什么是稀疏包:一个只声明「身份」、几乎不含 payload 的 MSIX,带
+//! `uap10:AllowExternalContent` 与 `uap10:RuntimeBehavior="win32App"`。
+//! 它告诉系统「应用主体(exe 及资源)放在外部目录」,但 exe 本身不进包、
+//! 不被虚拟化。注册后,只要进程以这个身份启动,就拥有包身份。
+//!
+//! 为什么能解决 0x80070490:`NotificationChanged` 是 UWP 风格的「带身份事件」,
+//! 系统要求订阅者具备 MSIX 包身份。注册稀疏包给进程补上身份后订阅即可成功。
+//!
+//! ⚠️ 进程身份在创建时确定:注册发生在本进程启动之后,所以对「当前已在运行
+//! 的进程」订阅不一定立刻生效 —— 常见情况是要重启应用后事件驱动才生效。
+//!
+//! 卸载(一句带过):`Remove-AppxPackage` 同名包,或用
+//! `PackageManager::RemovePackageAsync` 按包全名卸载。
+//!
+//! 本模块的所有失败都只返回 `Err(String)`,绝不 panic;自身逻辑开销极小,
+//! 最多重试一次注册。注意:注册本身是系统部署操作,耗时不由本模块控制
+//! (实测首次注册遇到不受信任证书时,系统做证书链校验可能耗时数分钟),
+//! 只保证失败一律返回 Err、由调用方降级。
+
+use std::path::PathBuf;
+
+use windows::core::HSTRING;
+use windows::Foundation::Uri;
+use windows::Management::Deployment::{AddPackageOptions, PackageManager};
+
+/// 清单里声明的身份(与 AppxManifest.xml 保持一致)
+const PACKAGE_NAME: &str = "ClipboardManagerIdentity";
+const PACKAGE_PUBLISHER: &str = "CN=ClipboardManager";
+
+/// 本应用的 AUMID = 包族名(PFN)!应用 Id。PFN 由 Name+Publisher 确定性
+/// 哈希而来,只要清单里 Name/Publisher 不变就不会变(实测值,改动清单后
+/// 需重新确认)。Shell 激活(AUMID)是稀疏包身份授予的唯一途径:直接
+/// 启动 exe 的进程没有身份,必须经 ActivationManager 拉起。
+pub const APP_AUMID: &str = "ClipboardManagerIdentity_z0fnhbkv2vcxr!ClipboardManagerApp";
+
+/// 当前进程是否具备包身份(进程身份在创建时确定,注册对运行中的进程无效)
+pub fn has_identity() -> bool {
+    windows::ApplicationModel::AppInfo::Current().is_ok()
+}
+
+/// 以包 AUMID 经 Shell 激活重启应用:新进程出生即带稀疏包身份,
+/// 从而能订阅 NotificationChanged。只发激活请求,不等待新进程;
+/// 调用方负责随后退出当前进程(app_handle.exit(0))。
+pub fn relaunch_self_via_identity() -> Result<(), String> {
+    unsafe {
+        use windows::Win32::System::Com::{
+            CoCreateInstance, CoInitializeEx, CLSCTX_LOCAL_SERVER, COINIT_APARTMENTTHREADED,
+        };
+        use windows::Win32::UI::Shell::{
+            ApplicationActivationManager, IApplicationActivationManager, ACTIVATEOPTIONS,
+        };
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let mgr: IApplicationActivationManager = CoCreateInstance(
+            &ApplicationActivationManager,
+            None,
+            CLSCTX_LOCAL_SERVER,
+        )
+        .map_err(|e| format!("CoCreateInstance(ApplicationActivationManager) 失败: {e}"))?;
+        mgr.ActivateApplication(
+            &HSTRING::from(APP_AUMID),
+            &HSTRING::from(""),
+            ACTIVATEOPTIONS(0),
+        )
+        .map_err(|e| format!("ActivateApplication 失败: {e}"))?;
+        Ok(())
+    }
+}
+
+/// 证书不受信任根导致的 HRESULT(CERT_E_UNTRUSTEDROOT)。
+/// 整族 0x800Bxxxx 都是 Crypto32 的证书链信任问题,加进
+/// `CurrentUser\TrustedPeople` 即可解决,故一并重试。
+const CERT_E_UNTRUSTEDROOT: u32 = 0x800B0109;
+
+/// 确保稀疏包身份已注册。
+///
+/// - 已注册 → 直接 `Ok(())`(注册是幂等的,同名更高版本会被接受)
+/// - 未注册 → 找到 msix,向系统注册(ExternalLocation = exe 所在目录)
+/// - 若注册因证书不受信任根失败 → 用 `certutil` 把 .cer 加进
+///   `CurrentUser\TrustedPeople`(每用户、无需管理员),再重试一次
+/// - 任何失败 → `Err(原因)`,由调用方降级
+pub fn ensure_identity_registered() -> Result<(), String> {
+    // 已注册则跳过(也避免重复注册把时间花在已注册的路径上)
+    if is_registered() {
+        return Ok(());
+    }
+
+    let msix = find_msix().ok_or_else(|| {
+        "找不到 clipboard-identity.msix:请把它放在 exe 同目录、或 src-tauri/identity/ 下(见 build-identity.ps1)".to_string()
+    })?;
+
+    let exe_dir = exe_dir().ok_or_else(|| "取不到当前 exe 所在目录".to_string())?;
+
+    match register(&msix, &exe_dir) {
+        Ok(()) => Ok(()),
+        Err((code, msg)) => {
+            // 证书不被系统信任:导入到受信任存储后重试一次。
+            // 重试不做时间门控——首次注册可能因系统做证书链校验而耗时数分钟,
+            // 任何死线都会把「导入证书(真正的修复动作)后的关键重试」拦掉;
+            // 重试本身至多发生一次,不会无限阻塞
+            if is_untrusted_cert_error(code, &msg) {
+                let cer = msix.with_extension("cer");
+                if let Err(import_err) = import_cert_trusted_people(&cer) {
+                    return Err(format!(
+                        "注册因证书不受信任({:#010X})失败,且导入证书也失败: {import_err}; 原始错误: {msg}",
+                        code
+                    ));
+                }
+                return register(&msix, &exe_dir).map_err(|(_, m)| {
+                    format!(
+                        "导入证书到受信任存储后注册仍失败: {m}。\
+                         提示:签名信任校验由 AppX 部署服务在系统上下文执行,\
+                         CurrentUser 导入通常不够;需要管理员执行 \
+                         `certutil -addstore TrustedPeople <cer>`(LocalMachine)后重试"
+                    )
+                });
+            }
+            Err(msg)
+        }
+    }
+}
+
+/// 同名包是否已注册(简化判断:FindPackagesByNamePublisher 有结果即视为已注册;
+/// AddPackageByUriAsync 对同名更高版本会自动更新,旧版本同名注册也会被接受)
+fn is_registered() -> bool {
+    let Ok(pm) = PackageManager::new() else {
+        return false;
+    };
+    let Ok(packages) = pm.FindPackagesByNamePublisher(
+        &HSTRING::from(PACKAGE_NAME),
+        &HSTRING::from(PACKAGE_PUBLISHER),
+    ) else {
+        return false;
+    };
+    // IIterable<Package> 实现了 IntoIterator;有任何一项即已注册
+    packages.into_iter().next().is_some()
+}
+
+/// 注册稀疏包。成功返回 `Ok(())`;失败返回 `(HRESULT 低 32 位, 原因)`(code 为 0
+/// 表示拿不到具体错误码)。
+fn register(msix: &std::path::Path, external_loc: &std::path::Path) -> Result<(), (u32, String)> {
+    let external_uri = match file_uri(external_loc) {
+        Ok(u) => u,
+        Err(e) => return Err((0, e)),
+    };
+    let package_uri = match file_uri(msix) {
+        Ok(u) => u,
+        Err(e) => return Err((0, e)),
+    };
+
+    let pm = match PackageManager::new() {
+        Ok(pm) => pm,
+        Err(e) => return Err((0, format!("PackageManager::new 失败: {e}"))),
+    };
+    let options = match AddPackageOptions::new() {
+        Ok(o) => o,
+        Err(e) => return Err((0, format!("AddPackageOptions::new 失败: {e}"))),
+    };
+    if let Err(e) = options.SetExternalLocationUri(&external_uri) {
+        return Err((0, format!("SetExternalLocationUri 失败: {e}")));
+    }
+
+    let op = match pm.AddPackageByUriAsync(&package_uri, &options) {
+        Ok(op) => op,
+        Err(e) => return Err((e.code().0 as u32, format!("AddPackageByUriAsync 失败: {e}"))),
+    };
+
+    match op.get() {
+        Ok(result) => {
+            // 注册可能「完成」但返回非零 ExtendedErrorCode(例如 capability 清单校验错误)
+            match result.ExtendedErrorCode() {
+                Ok(hr) if hr.0 == 0 => Ok(()),
+                Ok(hr) => {
+                    let text = result
+                        .ErrorText()
+                        .ok()
+                        .map(|t| t.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    Err((
+                        hr.0 as u32,
+                        format!(
+                            "注册返回非零 ExtendedErrorCode {:#010X}: {}",
+                            hr.0 as u32,
+                            text
+                        ),
+                    ))
+                }
+                Err(e) => Err((0, format!("读取 DeploymentResult.ExtendedErrorCode 失败: {e}"))),
+            }
+        }
+        Err(e) => {
+            let code = e.code().0 as u32;
+            Err((code, format!("AddPackageByUriAsync 完成但报错 {:#010X}: {e}", code)))
+        }
+    }
+}
+
+/// 把本地路径构造成 `file:///` URI(Uri::CreateUri 要求绝对 URI)
+fn file_uri(path: &std::path::Path) -> Result<Uri, String> {
+    let s = path.to_string_lossy().replace('\\', "/");
+    let uri_str = if s.starts_with("file://") {
+        s.to_string()
+    } else {
+        format!("file:///{s}")
+    };
+    Uri::CreateUri(&HSTRING::from(uri_str.clone()))
+        .map_err(|e| format!("构造 file URI 失败({uri_str}): {e}"))
+}
+
+/// 证书不受信任根错误。可能包括:
+/// - `0x800B0109`(CERT_E_UNTRUSTEDROOT)及其整族 `0x800Bxxxx`(Crypto32 证书链信任问题)
+/// - APPX 部署错误 `0x87E80034`(APPX_E_CERT_NOT_TRUSTED)及其 `0x87E8xxxx` 族:
+///   注册稀疏包时,签名证书不在受信任存储会报这个码,内层仍是 0x800B0109
+/// - 兜底:错误信息里直接出现不受信任根证书的具体码或关键字
+///
+/// 这些都能通过把 .cer 加进 `CurrentUser\TrustedPeople`(及 `Root`)解决。
+fn is_untrusted_cert_error(code: u32, msg: &str) -> bool {
+    if code == CERT_E_UNTRUSTEDROOT || (code & 0xFFFF_0000) == 0x800B_0000 {
+        return true;
+    }
+    if code == 0x87E8_0034 || (code & 0xFFFF_0000) == 0x87E8_0000 {
+        return true;
+    }
+    let m = msg.to_ascii_lowercase();
+    m.contains("0x800b0109") || m.contains("untrusted") || m.contains("not trusted") || m.contains("受信任")
+}
+
+/// 用 `certutil` 把 .cer 加入 `CurrentUser` 下的受信任存储。
+///
+/// 导入证书到受信任存储(带 LocalMachine 回退 CurrentUser):
+/// - 本应用以 requireAdministrator 运行,**LocalMachine\TrustedPeople 必然成功**
+///   —— 这是实测唯一有效的位置:AppX 部署服务(AppXSvc,LocalSystem)在系统
+///   上下文做签名链校验,只看 LocalMachine 存储(2026-09-05 实测:只导入
+///   CurrentUser\Root + TrustedPeople 仍报 0x800B0109);
+/// - `-user`(CurrentUser)作为回退保留:万一运行在非提权环境(dev 探针等),
+///   导入 CurrentUser 虽然通常不够,但记录错误比静默跳过好。
+fn import_cert_trusted_people(cer: &std::path::Path) -> Result<(), String> {
+    if !cer.is_file() {
+        return Err(format!("找不到证书文件 {}", cer.display()));
+    }
+    let cer_str = cer.to_string_lossy().to_string();
+    let mut last_err = String::new();
+
+    // 1) LocalMachine(管理员必成功);含 Root + TrustedPeople 双保险
+    let mut machine_ok = false;
+    for store in ["Root", "TrustedPeople"] {
+        let status = std::process::Command::new("certutil")
+            .args(["-f", "-addstore", store, &cer_str])
+            .status()
+            .map_err(|e| format!("启动 certutil 失败: {e}"));
+        match status {
+            Ok(s) if s.success() => machine_ok = true,
+            Ok(s) => last_err = format!("certutil -addstore {store} 退出码 {}", s.code().unwrap_or(-1)),
+            Err(e) => last_err = e,
+        }
+    }
+    if machine_ok {
+        return Ok(());
+    }
+
+    // 2) 回退:CurrentUser(非提权环境;通常不足以通过 AppX 校验,仅记录)
+    let mut user_ok = false;
+    for store in ["Root", "TrustedPeople"] {
+        let status = std::process::Command::new("certutil")
+            .args(["-user", "-f", "-addstore", store, &cer_str])
+            .status();
+        match status {
+            Ok(s) if s.success() => user_ok = true,
+            Ok(s) => last_err = format!("certutil -user -addstore {store} 退出码 {}", s.code().unwrap_or(-1)),
+            Err(e) => last_err = e.to_string(),
+        }
+    }
+    if user_ok {
+        Ok(())
+    } else {
+        Err(format!(
+            "导入证书到受信任存储失败(LocalMachine 与 CurrentUser 均失败): {last_err}"
+        ))
+    }
+}
+
+/// 在候选位置里找 clipboard-identity.msix(优先级:exe 同目录 →
+/// identity 子目录 → 仓库 src-tauri/identity,兼顾探针与正式运行两种布局)
+fn find_msix() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let name = "clipboard-identity.msix";
+    let candidates = [
+        dir.join(name),
+        dir.join("identity").join(name),
+        dir.join("..").join("identity").join(name),
+        dir.join("..")
+            .join("src-tauri")
+            .join("identity")
+            .join(name),
+    ];
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// 当前 exe 所在目录(ExternalLocation 用,不含文件名)
+fn exe_dir() -> Option<PathBuf> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+}

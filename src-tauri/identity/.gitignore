@@ -1,0 +1,5 @@
+*.pfx
+*.cer
+*.msix
+files.txt
+Assets/

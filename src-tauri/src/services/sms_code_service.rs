@@ -27,6 +27,8 @@ use windows::UI::Notifications::Management::UserNotificationListener;
 use windows::UI::Notifications::Management::UserNotificationListenerAccessStatus;
 use windows::UI::Notifications::NotificationKinds;
 
+use crate::services::identity;
+
 /// 功能总开关。轮询线程常驻(与剪贴板监控同生命周期),靠这个标志决定
 /// 每轮是否真正去读通知——关闭时零 WinRT 调用,不占资源
 static ENABLED: AtomicBool = AtomicBool::new(false);
@@ -120,28 +122,71 @@ pub fn spawn(app_handle: tauri::AppHandle) {
             eprintln!("[sms-code] 初始轮询失败(由兜底轮询稍后重试): {}", e);
         }
 
-        // 订阅 NotificationChanged。回调跑在 WinRT 线程池线程上,只往通道
-        // 发一个唤醒信号,不做任何实际工作(剪贴板/前端事件都由主循环处理);
-        // 回调绝不能 panic(跨 FFI 边界),send 失败同样静默忽略。
+        // 订阅 NotificationChanged(封装成可重试函数):回调跑在 WinRT 线程池线程
+        // 上,只往通道发一个唤醒信号,不做任何实际工作(剪贴板/前端事件都由主循环
+        // 处理);回调绝不能 panic(跨 FFI 边界),send 失败同样静默忽略。
         //
         // ⚠️ 已知系统限制:无包身份(non-MSIX)的桌面应用订阅该事件必然报
         // 0x80070490(ERROR_NOT_FOUND)——事件要求应用具有 MSIX 身份,
         // 而轮询接口不需要。多个独立案例(Stack Overflow 74124560 等)确认。
-        // 所以除非将来给应用做稀疏 MSIX 身份,否则实际运行中总是走降级分支
-        let (wake_tx, wake_rx) = mpsc::channel::<()>();
-        let event_driven = match listener.NotificationChanged(&TypedEventHandler::new(
-            move |_listener, _args| {
-                let _ = wake_tx.send(());
-                Ok(())
-            },
-        )) {
-            Ok(_) => true,
+        //
+        // 重试策略:首次订阅失败时,先尝试注册稀疏包身份
+        // (identity::ensure_identity_registered);注册成功则再订阅一次。
+        // 注意:注册发生在本进程启动之后,进程身份在创建时确定,所以很可能
+        // 「注册成功但本次进程订阅仍失败」——这时打日志提示重启后生效,降级轮询。
+        // 失败的 handler 随闭包一并 drop(其中的 wake_tx 也 drop),rx 弃用,
+        // 下次重试会新建 channel,因此封装成「订阅一次并返回 rx」的函数。
+        let (wake_rx, event_driven) = match subscribe_event(&listener) {
+            Ok(rx) => (rx, true),
             Err(e) => {
                 eprintln!(
-                    "[sms-code] NotificationChanged 订阅失败(无包身份应用的已知限制),降级为 1s 纯轮询: {}",
+                    "[sms-code] NotificationChanged 订阅失败(无包身份应用的已知限制),尝试注册稀疏包身份: {}",
                     e
                 );
-                false
+                match identity::ensure_identity_registered() {
+                    Ok(()) => match subscribe_event(&listener) {
+                        Ok(rx) => {
+                            eprintln!("[sms-code] 注册稀疏包身份后事件订阅成功,事件驱动已启用");
+                            (rx, true)
+                        }
+                        Err(e2) => {
+                            // 注册成功但当前进程无身份(身份在进程创建时确定)。
+                            // 补救:经 Shell 以包 AUMID 重新激活应用 —— 新进程出生
+                            // 即带稀疏包身份,事件驱动直接可用。每次直接启动 exe
+                            // (自启动任务/桌面快捷方式)都会走一遍这个自动重启,
+                            // 只发生一次(新进程有身份,不会再进此分支)
+                            eprintln!(
+                                "[sms-code] 稀疏包身份已注册,但当前进程无身份;尝试以包身份重新激活应用: {e2}"
+                            );
+                            if !identity::has_identity() {
+                                match identity::relaunch_self_via_identity() {
+                                    Ok(()) => {
+                                        eprintln!(
+                                            "[sms-code] 已以包身份重新激活应用,当前进程退出"
+                                        );
+                                        // 给新进程留出启动时间再退出,避免托盘/单例空窗
+                                        std::thread::sleep(Duration::from_millis(500));
+                                        app_handle.exit(0);
+                                        return;
+                                    }
+                                    Err(re) => {
+                                        eprintln!(
+                                            "[sms-code] 以包身份重新激活失败({re}),降级为 1s 轮询"
+                                        );
+                                    }
+                                }
+                            }
+                            (mpsc::channel::<()>().1, false)
+                        }
+                    },
+                    Err(reg_err) => {
+                        eprintln!(
+                            "[sms-code] 稀疏包身份注册失败,降级为 1s 纯轮询: {}",
+                            reg_err
+                        );
+                        (mpsc::channel::<()>().1, false)
+                    }
+                }
             }
         };
 
@@ -195,6 +240,23 @@ pub fn spawn(app_handle: tauri::AppHandle) {
             }
         }
     });
+}
+
+/// 订阅一次 NotificationChanged,返回唤醒信号接收端。
+///
+/// 失败(`Err`)时 handler 随闭包一并 drop(其中的 `wake_tx` 也 drop),
+/// 调用方应弃用本次创建的 `rx` 并重新调用本函数重试。
+fn subscribe_event(
+    listener: &UserNotificationListener,
+) -> windows::core::Result<mpsc::Receiver<()>> {
+    let (wake_tx, wake_rx) = mpsc::channel::<()>();
+    listener.NotificationChanged(&TypedEventHandler::new(
+        move |_listener, _args| {
+            let _ = wake_tx.send(());
+            Ok(())
+        },
+    ))?;
+    Ok(wake_rx)
 }
 
 /// 一轮轮询。返回本轮新处理的验证码条数。

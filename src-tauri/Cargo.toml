@@ -52,4 +52,12 @@ windows = { version = "0.61", features = [
   "ApplicationModel",
   "Foundation",
   "Foundation_Collections",
+  # 稀疏 MSIX 包身份:运行时用 PackageManager 注册稀疏包,让进程获得包身份
+  # 从而能订阅 NotificationChanged(无身份必报 0x80070490)。需要
+  # Deployment API(FindPackagesByNamePublisher / AddPackageByUriAsync)。
+  # Win32_System_Com 供探针 bin 以 STA 初始化 COM(RequestAccessAsync
+  # 官方要求 UI 线程/STA 调用,MTA 下恒返回 Denied)
+  "Management_Deployment",
+  "Win32_System_Com",
+  "Win32_UI_Shell",
 ] }
