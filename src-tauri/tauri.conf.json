@@ -7,7 +7,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build && cd src-tauri && cargo build --release --example sms-helper && copy /Y target\\release\\examples\\sms-helper.exe identity\\sms-helper.exe",
     "frontendDist": "../dist"
   },
   "app": {
@@ -29,7 +29,8 @@
     ],
     "resources": [
       "identity/clipboard-identity.msix",
-      "identity/clipboard-identity.cer"
+      "identity/clipboard-identity.cer",
+      "identity/sms-helper.exe"
     ],
     "icon": [
       "icons/32x32.png",

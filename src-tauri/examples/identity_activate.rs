@@ -8,7 +8,7 @@ use windows::Win32::UI::Shell::{
     ApplicationActivationManager, IApplicationActivationManager, ACTIVATEOPTIONS,
 };
 
-const AUMID: &str = "ClipboardManagerIdentity_z0fnhbkv2vcxr!ClipboardManagerApp";
+const AUMID: &str = "ClipboardManagerIdentity_z0fnhbkv2vcxr!SmsHelper";
 
 fn main() {
     unsafe {

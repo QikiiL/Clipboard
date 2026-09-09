@@ -148,7 +148,17 @@ pub fn spawn(app_handle: tauri::AppHandle) {
                     e
                 );
                 match identity::ensure_identity_registered() {
-                    Ok(()) => match subscribe_event(&listener) {
+                    Ok(()) => {
+                        // 重试订阅前先刷新过期注册:稀疏包版本或清单内容若与
+                        // 当前不一致(如 0.2.1.3 → 0.2.1.4 新增 SmsHelper 条目),
+                        // 旧注册会让激活 helper 的 AUMID 找不到对应条目
+                        if let Err(stale_err) = identity::reregister_if_stale() {
+                            eprintln!(
+                                "[sms-code] 过期稀疏包注册刷新失败(继续重试订阅): {}",
+                                stale_err
+                            );
+                        }
+                        match subscribe_event(&listener) {
                         Ok(rx) => {
                             eprintln!("[sms-code] 注册稀疏包身份后事件订阅成功,事件驱动已启用");
                             // 身份确认可用:清除自动重启冷却标记,
@@ -158,46 +168,31 @@ pub fn spawn(app_handle: tauri::AppHandle) {
                         }
                         Err(e2) => {
                             // 注册成功但当前进程无身份(身份在进程创建时确定)。
-                            // 补救:经 Shell 以包 AUMID 重新激活应用 —— 新进程出生
-                            // 即带稀疏包身份,事件驱动直接可用。
-                            // 两道防线防死循环:
-                            // 1. 先强制重注册过期身份(版本/内容不一致时);
-                            // 2. 60 秒冷却标记:身份始终拿不到(环境问题)时,
-                            //    最多每分钟自动重启一次,而不是无限循环
+                            //
+                            // ⚠️ 主程序带 requireAdministrator 清单,Shell 激活
+                            // (ActivateApplication)只支持中等完整性启动,拉起提权
+                            // exe 必报 0x80070032「不支持该请求」。所以不能重启
+                            // 主进程,改为激活 asInvoker 的 sms-helper.exe
+                            // (Helper_AUMID):helper 出生即带身份、订阅事件、
+                            // 提取验证码后直接写剪贴板,主程序监控线程照常入库,
+                            // 本线程转入监工循环(见 supervise_helper)
                             eprintln!(
-                                "[sms-code] 稀疏包身份已注册,但当前进程无身份;尝试以包身份重新激活应用: {e2}"
+                                "[sms-code] 稀疏包身份已注册,但当前进程无身份,激活 sms-helper: {e2}"
                             );
-                            if !identity::has_identity() {
-                                if let Err(re) = identity::reregister_if_stale() {
-                                    eprintln!("[sms-code] 稀疏包过期重注册失败(忽略,继续重启流程): {re}");
-                                }
-                                if identity::relaunch_allowed() {
-                                    identity::mark_relaunch();
-                                    match identity::relaunch_self_via_identity() {
-                                        Ok(()) => {
-                                            eprintln!(
-                                                "[sms-code] 已以包身份重新激活应用,当前进程退出"
-                                            );
-                                            // 给新进程留出启动时间再退出,避免托盘/单例空窗
-                                            std::thread::sleep(Duration::from_millis(500));
-                                            app_handle.exit(0);
-                                            return;
-                                        }
-                                        Err(re) => {
-                                            eprintln!(
-                                                "[sms-code] 以包身份重新激活失败({re}),降级为 1s 轮询"
-                                            );
-                                        }
-                                    }
-                                } else {
+                            match identity::activate_helper() {
+                                Ok(pid) => supervise_helper(pid),
+                                Err(e) => {
+                                    // 激活失败(如包注册异常/清单缺 SmsHelper 条目):
+                                    // 打日志,退回 1s 纯轮询降级,功能不废
                                     eprintln!(
-                                        "[sms-code] 距上次自动重启不足冷却期,本轮放弃重启,降级为 1s 轮询"
+                                        "[sms-code] 激活 sms-helper 失败,降级为 1s 轮询: {e}"
                                     );
+                                    (mpsc::channel::<()>().1, false)
                                 }
                             }
-                            (mpsc::channel::<()>().1, false)
                         }
-                    },
+                        }
+                    }
                     Err(reg_err) => {
                         eprintln!(
                             "[sms-code] 稀疏包身份注册失败,降级为 1s 纯轮询: {}",
@@ -259,6 +254,52 @@ pub fn spawn(app_handle: tauri::AppHandle) {
             }
         }
     });
+}
+
+/// 监工循环:主程序无身份、捕获工作全部由 sms-helper 承担,本线程只负责
+/// 看 helper 死没死 —— 每 30 秒检查一次,退出就重新激活,永不返回
+/// (线程常驻)。开关语义在这里不再需要:开关由 helper 读配置文件处理。
+fn supervise_helper(first_pid: u32) -> ! {
+    let mut pid = first_pid;
+    eprintln!("[sms-code] sms-helper 已激活 (pid={pid}),本线程进入监工模式,捕获由 helper 负责");
+    loop {
+        std::thread::sleep(Duration::from_secs(30));
+        if !process_alive(pid) {
+            eprintln!("[sms-code] sms-helper (pid={pid}) 已退出,重新激活");
+            match identity::activate_helper() {
+                Ok(p) => {
+                    eprintln!("[sms-code] sms-helper 已重新激活 (pid={p})");
+                    pid = p;
+                }
+                Err(e) => {
+                    eprintln!("[sms-code] 重新激活 sms-helper 失败(30 秒后重试): {e}");
+                }
+            }
+        }
+    }
+}
+
+/// 进程是否存活:OpenProcess(最小查询权限) + GetExitCodeProcess。
+/// 打不开句柄按已退出处理;STILL_ACTIVE(259) = 存活
+fn process_alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    // windows 0.61 未导出 STILL_ACTIVE(伪退出码),按 MSDN 值本地定义
+    const STILL_ACTIVE: u32 = 259;
+    unsafe {
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Threading::{
+            GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+            return false;
+        };
+        let mut code: u32 = 0;
+        let alive = GetExitCodeProcess(h, &mut code).is_ok() && code == STILL_ACTIVE;
+        let _ = CloseHandle(h);
+        alive
+    }
 }
 
 /// 订阅一次 NotificationChanged,返回唤醒信号接收端。

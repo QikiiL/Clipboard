@@ -40,7 +40,13 @@ const PACKAGE_PUBLISHER: &str = "CN=ClipboardManager";
 /// 启动 exe 的进程没有身份,必须经 ActivationManager 拉起。
 pub const APP_AUMID: &str = "ClipboardManagerIdentity_z0fnhbkv2vcxr!ClipboardManagerApp";
 
+/// sms-helper.exe 的 AUMID(包族名!Application Id,与 AppxManifest.xml 里
+/// Id="SmsHelper" 的条目对应)。主程序激活 helper 用:helper 是 asInvoker
+/// 的轻量进程,Shell 以 AUMID 激活后自带稀疏包身份,能订阅 NotificationChanged
+pub const HELPER_AUMID: &str = "ClipboardManagerIdentity_z0fnhbkv2vcxr!SmsHelper";
+
 /// 当前进程是否具备包身份(进程身份在创建时确定,注册对运行中的进程无效)
+#[allow(dead_code)]
 pub fn has_identity() -> bool {
     windows::ApplicationModel::AppInfo::Current().is_ok()
 }
@@ -48,6 +54,7 @@ pub fn has_identity() -> bool {
 /// 以包 AUMID 经 Shell 激活重启应用:新进程出生即带稀疏包身份,
 /// 从而能订阅 NotificationChanged。只发激活请求,不等待新进程;
 /// 调用方负责随后退出当前进程(app_handle.exit(0))。
+#[allow(dead_code)]
 pub fn relaunch_self_via_identity() -> Result<(), String> {
     unsafe {
         use windows::Win32::System::Com::{
@@ -70,6 +77,39 @@ pub fn relaunch_self_via_identity() -> Result<(), String> {
         )
         .map_err(|e| format!("ActivateApplication 失败: {e}"))?;
         Ok(())
+    }
+}
+
+/// 以 helper 的包 AUMID 经 Shell 激活拉起 sms-helper.exe:helper 是 asInvoker
+/// 的轻量进程,Shell 激活后出生即带稀疏包身份,能订阅 NotificationChanged
+/// 并直接写剪贴板(提权的主进程做不到,见模块头注释)。
+/// 返回激活的进程 PID,调用方用于看门狗监控。
+/// 前提:稀疏包已注册且清单里含 Id="SmsHelper" 条目(调用方先 ensure)。
+#[allow(dead_code)]
+pub fn activate_helper() -> Result<u32, String> {
+    unsafe {
+        use windows::Win32::System::Com::{
+            CoCreateInstance, CoInitializeEx, CLSCTX_LOCAL_SERVER, COINIT_APARTMENTTHREADED,
+        };
+        use windows::Win32::UI::Shell::{
+            ApplicationActivationManager, IApplicationActivationManager, ACTIVATEOPTIONS,
+        };
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let mgr: IApplicationActivationManager = CoCreateInstance(
+            &ApplicationActivationManager,
+            None,
+            CLSCTX_LOCAL_SERVER,
+        )
+        .map_err(|e| format!("CoCreateInstance(ApplicationActivationManager) 失败: {e}"))?;
+        let arguments = format!("--parent {}", std::process::id());
+        let pid = mgr
+            .ActivateApplication(
+                &HSTRING::from(HELPER_AUMID),
+                &HSTRING::from(arguments),
+                ACTIVATEOPTIONS(0),
+            )
+            .map_err(|e| format!("ActivateApplication(助手) 失败: {e}"))?;
+        Ok(pid)
     }
 }
 
@@ -146,7 +186,7 @@ fn is_registered() -> bool {
 /// (改清单版本时必须同步改这里,否则会被误判为「过期」而反复重装)。
 /// 四元组含 Revision:仅比 (Major,Minor,Build) 无法区分内容过期但版本
 /// 三元组相同的注册(实测踩过:0.2.1.2 与 0.2.1.3 前三位相同)。
-const EXPECTED_IDENTITY_VERSION: (u64, u64, u64, u64) = (0, 2, 1, 3);
+const EXPECTED_IDENTITY_VERSION: (u64, u64, u64, u64) = (0, 2, 1, 4);
 
 /// 已注册的稀疏包版本是否与 EXPECTED_IDENTITY_VERSION 完全一致。
 /// 不一致(含「清单元数据里 Executable 指向旧 exe」的场景,版本相同但内容过期)
@@ -221,6 +261,7 @@ fn marker_path() -> PathBuf {
 }
 
 /// 距上次自动重启是否已过冷却期
+#[allow(dead_code)]
 pub fn relaunch_allowed() -> bool {
     match std::fs::metadata(marker_path()) {
         Ok(m) => {
@@ -237,6 +278,7 @@ pub fn relaunch_allowed() -> bool {
 }
 
 /// 记录一次自动重启(冷却期起点)
+#[allow(dead_code)]
 pub fn mark_relaunch() {
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
