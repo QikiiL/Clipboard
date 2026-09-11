@@ -74,6 +74,13 @@ export function ContentEditorDialog({
     }
   };
 
+  // Ctrl+C 原生复制同样算「复制选中」:勾选自动关闭时也关窗。
+  // 剪贴板写入发生在 copy 事件派发完成之后,故延后一拍再关,
+  // 确保复制先落地、关闭后主程序的剪贴板监控才能捕获到新内容
+  const handleNativeCopy = useCallback(() => {
+    if (autoClose) window.setTimeout(onClose, 0);
+  }, [autoClose, onClose]);
+
   const handleSave = async () => {
     if (!item || saving) return;
     setSaving(true);
@@ -116,6 +123,7 @@ export function ContentEditorDialog({
             onSelect={syncSelection}
             onKeyUp={syncSelection}
             onMouseUp={syncSelection}
+            onCopy={handleNativeCopy}
             className="w-full h-[46vh] min-h-[160px] px-3 py-2 rounded-[10px] border border-hairline bg-app text-[13px] leading-relaxed text-ink outline-none resize-none overflow-y-auto focus:border-accent transition-colors"
           />
           {error && <p className="mt-2 text-[11.5px] text-danger">{error}</p>}
