@@ -1,7 +1,7 @@
 {
-  "version": "0.2.5",
-  "notes": "窗口自适应:按当前显示器工作区与缩放自动调整面板尺寸,小屏不越界、大屏不显小,跨不同 DPI 显示器拖动视觉大小一致\n- 修复 125%/150% 缩放下界面可能模糊的问题(补 PerMonitorV2 DPI 感知)\n- 退出路径更干净;后台短信监听进程加固(单实例防重复捕获、异常自动退出不留残留)\n- 升级流程全自动:运行安装包一次,自动完成升级并重启",
-  "github": "https://github.com/QikiiL/Clipboard/releases",
+  "version": "0.3.0",
+  "notes": "新增「内容预览与编辑」:列表项悬浮眼睛图标可预览全文(滚轮滚动),点击打开编辑窗口,支持选中片段复制与直接编辑保存\n- 修复编辑窗口在窄面板下的溢出问题\n- 升级流程全自动:运行安装包一次,自动完成升级并重启",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v0.3.0",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }
