@@ -1,6 +1,6 @@
 {
-  "version": "0.2.4",
-  "notes": "修复部分电脑上短信监听进程路径错位导致的「找不到文件」弹窗\n- 短信验证码捕获保持亚秒级事件驱动\n- 升级流程全自动:运行安装包一次,自动完成升级并重启",
+  "version": "0.2.5",
+  "notes": "窗口自适应:按当前显示器工作区与缩放自动调整面板尺寸,小屏不越界、大屏不显小,跨不同 DPI 显示器拖动视觉大小一致\n- 修复 125%/150% 缩放下界面可能模糊的问题(补 PerMonitorV2 DPI 感知)\n- 退出路径更干净;后台短信监听进程加固(单实例防重复捕获、异常自动退出不留残留)\n- 升级流程全自动:运行安装包一次,自动完成升级并重启",
   "github": "https://github.com/QikiiL/Clipboard/releases",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
