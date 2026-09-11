@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback, useRef } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { useClipboardStore } from '../stores/clipboardStore';
 import type { ClipboardItem as ClipboardItemType, ClipboardType } from '../types/clipboard';
@@ -115,13 +115,19 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
   }, []);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
   // 悬停「眼睛」时的全文气泡:position:fixed 跟随按钮矩形定位,
-  // 不参与虚拟列表的行高计算,避免悬停时列表抖动
+  // 不参与虚拟列表的行高计算,避免悬停时列表抖动。
+  // 气泡可交互(pointer-events 默认值):滚轮直接滚动浏览长文本,
+  // 移入气泡不会关闭 —— 靠「按钮 leave 延时关闭 + 气泡 enter 取消」接力
   const [contentTip, setContentTip] = useState<
-    { left: number; top: number; flipUp: boolean } | null
+    { left: number; top: number; flipUp: boolean; maxHeight: number } | null
   >(null);
+  const tipCloseTimer = useRef<number | undefined>(undefined);
   const groups = useClipboardStore((s) => s.groups);
 
+  useEffect(() => () => window.clearTimeout(tipCloseTimer.current), []);
+
   const handleEyeEnter = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    window.clearTimeout(tipCloseTimer.current);
     const rect = e.currentTarget.getBoundingClientRect();
     const TIP_W = 320; // 与气泡 maxWidth 保持一致,用于水平夹取
     const GAP = 8;
@@ -129,10 +135,24 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
       Math.max(GAP, rect.right - TIP_W),
       Math.max(GAP, window.innerWidth - TIP_W - GAP),
     );
-    // 按钮位于屏幕下半区时向上弹出,避免气泡超出视口底部
-    const flipUp = rect.top > window.innerHeight * 0.55;
-    setContentTip({ left, top: flipUp ? rect.top - GAP : rect.bottom + GAP, flipUp });
+    // 按按钮上/下方的**实际剩余空间**决定弹出方向与最大高度:
+    // 之前按"下半屏就向上翻"的粗略启发式,气泡仍可能越过窗口底边被截断
+    const spaceBelow = window.innerHeight - rect.bottom - GAP;
+    const spaceAbove = rect.top - GAP;
+    const flipUp = spaceAbove > spaceBelow;
+    const maxHeight = Math.max(
+      120,
+      Math.min(window.innerHeight * 0.45, flipUp ? spaceAbove : spaceBelow),
+    );
+    setContentTip({ left, top: flipUp ? rect.top - GAP : rect.bottom + GAP, flipUp, maxHeight });
   }, []);
+
+  // 离开按钮后延迟一小段再关,给鼠标移进气泡留出时间差
+  const handleEyeLeave = useCallback(() => {
+    window.clearTimeout(tipCloseTimer.current);
+    tipCloseTimer.current = window.setTimeout(() => setContentTip(null), 120);
+  }, []);
+  const cancelTipClose = useCallback(() => window.clearTimeout(tipCloseTimer.current), []);
 
   const handleMouseEnter = useCallback((e: React.MouseEvent) => {
     setMousePos({ x: e.clientX, y: e.clientY });
@@ -311,7 +331,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
               <button
                 onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={handleEyeEnter}
-                onMouseLeave={() => setContentTip(null)}
+                onMouseLeave={handleEyeLeave}
                 onClick={(e) => { e.stopPropagation(); e.currentTarget.blur(); onPreview(item); }}
                 className="flex items-center justify-center w-[26px] h-[26px] rounded-[7px] text-faint hover:bg-hairline hover:text-muted transition-colors @max-narrow:w-[22px] @max-narrow:h-[22px]"
                 title="预览 / 编辑内容"
@@ -350,15 +370,23 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
         <div
           // 外层只负责定位与 flipUp 的 translateY,动画用仅含 opacity 的 clip-fade-in:
           // clip-pop-in 会在动画结束时把 transform 覆盖为 none,导致向上弹出的气泡跳位。
-          className="fixed z-[9999] pointer-events-none clip-fade-in"
+          // 气泡可交互:滚轮滚动浏览全文;enter 取消按钮 leave 安排的延时关闭,
+          // leave 重新安排;stopPropagation 防止点击气泡触发卡片「点击即粘贴」
+          className="fixed z-[9999] clip-fade-in"
           style={{
             left: contentTip.left,
             top: contentTip.top,
             transform: contentTip.flipUp ? 'translateY(-100%)' : undefined,
           }}
+          onMouseEnter={cancelTipClose}
+          onMouseLeave={handleEyeLeave}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div className="bg-surface rounded-lg shadow-dialog border border-hairline px-3 py-2 max-w-[320px] max-h-[45vh] overflow-hidden">
-            <p className="text-[12.5px] leading-relaxed text-ink whitespace-pre-wrap break-words">
+          <div
+            className="bg-surface rounded-lg shadow-dialog border border-hairline px-3 py-2 max-w-[320px] overflow-y-auto"
+            style={{ maxHeight: contentTip.maxHeight }}
+          >
+            <p className="text-[12.5px] leading-relaxed text-ink whitespace-pre-wrap break-words select-text">
               {item.content}
             </p>
           </div>
