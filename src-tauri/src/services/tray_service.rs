@@ -48,7 +48,8 @@ pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 crate::utils::window_manager::destroy_main_window(app);
             }
             "quit" => {
-                app.exit(0);
+                // 统一退出入口:先销毁窗口再 exit,消除 WebView2 退出噪音
+                crate::utils::window_manager::exit_app(app);
             }
             _ => {}
         })

@@ -102,10 +102,11 @@ pub fn get_close_behavior(app_handle: tauri::AppHandle) -> Result<CloseBehavior,
 }
 
 /// 退出应用。主进程不随窗口销毁而退出(见 lib.rs 的 prevent_exit),
-/// 必须显式 exit 触发完整清理流程。
+/// 必须显式 exit 触发完整清理流程;统一走 exit_app(先销毁窗口再退出,
+/// 让 WebView2 完成注销,避免退出时的窗口类注销噪音)。
 #[tauri::command]
 pub fn close_app(app_handle: tauri::AppHandle) {
-    app_handle.exit(0);
+    crate::utils::window_manager::exit_app(&app_handle);
 }
 
 #[tauri::command]

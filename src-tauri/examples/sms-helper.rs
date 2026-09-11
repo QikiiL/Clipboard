@@ -36,6 +36,21 @@ mod identity;
 /// Phone Link 的 AUMID 前缀(小写比较)。与主程序 sms_code_service.rs 同源
 const PHONE_LINK_AUMID_PREFIX: &str = "microsoft.yourphone";
 
+/// 单实例互斥体的 Win32 声明:按项目约定用裸 `#[link]`(CreateMutexW 在
+/// windows crate 里被 Win32_Security feature 门控,不为一个调用引入整个模块)
+#[link(name = "kernel32")]
+extern "system" {
+    fn CreateMutexW(
+        lp_mutex_attributes: *const core::ffi::c_void,
+        b_initial_owner: i32,
+        lp_name: *const u16,
+    ) -> *mut core::ffi::c_void;
+    fn GetLastError() -> u32;
+}
+
+/// ERROR_ALREADY_EXISTS:CreateMutexW 命中同名互斥体时 GetLastError 返回它
+const ERROR_ALREADY_EXISTS: u32 = 183;
+
 /// 已见通知的 (aumid, id) 集合。轮询线程独占访问即可,不必上锁
 type SeenSet = HashSet<(String, u32)>;
 
@@ -51,6 +66,19 @@ fn main() {
         "sms-helper 启动 (pid={}, parent={parent_pid})",
         std::process::id()
     ));
+
+    // 单实例护栏:应用快速重启时,旧 helper 最多要 5 秒才被看门狗发现父进程已死,
+    // 这段窗口里两个 helper 会同时订阅、把同一个验证码重复写两遍剪贴板。
+    // 命名互斥体(Local\ = 当前登录会话)保证同一时刻只有一个 helper;
+    // 进程退出时内核自动释放,不会像锁文件那样留下残留。
+    let mutex_name: Vec<u16> = "Local\\clipboard-sms-helper\0".encode_utf16().collect();
+    let handle = unsafe { CreateMutexW(std::ptr::null(), 1, mutex_name.as_ptr()) };
+    if handle.is_null() {
+        log("单实例互斥体创建失败(忽略,继续运行)");
+    } else if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
+        log("已有 helper 实例在运行,本实例退出(避免重复捕获)");
+        return;
+    }
 
     // COM 以 STA 初始化:RequestAccessAsync 官方要求 UI 线程(STA)调用,
     // MTA 线程上调用会直接返回 Denied(identity_probe.rs 实测结论)
@@ -126,6 +154,7 @@ fn event_loop(
     mut seen: SeenSet,
 ) {
     let mut last_watchdog = std::time::Instant::now();
+    let started = std::time::Instant::now();
 
     loop {
         // 父进程看门狗:主程序退出 → helper 跟着退出,不留孤儿进程
@@ -135,6 +164,12 @@ fn event_loop(
                 log(&format!("父进程 (pid={parent_pid}) 已退出,helper 退出"));
                 return;
             }
+        }
+        // 无 --parent(手工/调试启动)时看门狗不工作:60 分钟后自动退出,
+        // 避免遗留孤儿进程在应用关闭后仍持续写剪贴板
+        if parent_pid == 0 && started.elapsed() >= Duration::from_secs(3600) {
+            log("无父进程监护已运行 60 分钟,自动退出(防孤儿驻留)");
+            return;
         }
 
         match wake_rx.recv_timeout(Duration::from_millis(1000)) {

@@ -243,8 +243,9 @@ fn register_close_handler(window: &tauri::WebviewWindow) {
                 }
                 CloseBehavior::Close => {
                     // 主进程不随最后一个窗口销毁而退出(见 lib.rs 的 prevent_exit),
-                    // “直接退出”必须显式调 exit
-                    app_handle.exit(0);
+                    // “直接退出”必须显式调 exit;统一走 exit_app 先销毁窗口,
+                    // 避免 WebView2 注销窗口类失败的退出噪音
+                    exit_app(app_handle);
                 }
                 CloseBehavior::Ask => {
                     api.prevent_close();
@@ -264,6 +265,17 @@ pub fn destroy_main_window(app: &AppHandle) {
     let _ = window.destroy();
     // 主进程工作集裁剪,物理内存立即下降
     crate::utils::webview_control::set_webview_visible(app, false);
+}
+
+/// 统一退出入口:先销毁主窗口,再 exit。
+///
+/// 为什么必须先销毁:Chromium/WebView2 在进程直接退出时会来不及注销窗口类,
+/// 打印 [`Failed to unregister class Chrome_WidgetWin_0. Error = 1412`] 噪音
+/// (ERROR_CLASS_HAS_WINDOWS;Tauri issue #7606、Wails #4373 均为同一现象)。
+/// 只是日志、不影响功能,但先把 WebView2 拆干净能让退出路径安静且资源释放完整。
+pub fn exit_app(app: &AppHandle) {
+    destroy_main_window(app);
+    app.exit(0);
 }
 
 /// 页面加载完成后的焦点保障:紧跟 show() 调用的 set_focus() 可能被
