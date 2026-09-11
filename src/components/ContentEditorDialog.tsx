@@ -106,7 +106,9 @@ export function ContentEditorDialog({
           </button>
         </div>
 
-        <div className="px-5 py-4 flex-1 min-h-0">
+        {/* min-h + overflow-y-auto:极矮窗口下 textarea 的 160px 下限可能
+            撑破面板 88vh 上限,让内容区自己滚动,保证底部按钮永远可见 */}
+        <div className="px-5 py-4 flex-1 min-h-0 overflow-y-auto">
           <textarea
             ref={areaRef}
             value={text}
@@ -119,21 +121,24 @@ export function ContentEditorDialog({
           {error && <p className="mt-2 text-[11.5px] text-danger">{error}</p>}
         </div>
 
-        <div className="flex items-center justify-between gap-2 px-5 pt-3 pb-4 border-t border-hairline">
-          <label className="flex items-center gap-2 text-[12.5px] text-muted cursor-pointer select-none">
+        {/* 底部固定两行(选项一行、按钮一行):窄面板下横向一行会被挤到
+            每个字竖排折行(实测 370px 面板溢出),按钮一律 nowrap 防折行 */}
+        <div className="px-5 pt-3 pb-4 border-t border-hairline">
+          <label className="flex items-start gap-2 text-[12.5px] text-muted cursor-pointer select-none">
             <input
               type="checkbox"
               checked={autoClose}
               onChange={(e) => setAutoClose(e.target.checked)}
               style={{ accentColor: 'var(--accent)' }}
+              className="mt-px flex-shrink-0"
             />
             复制选中后自动关闭此窗口
           </label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2 mt-3">
             <button
               onClick={() => void handleCopy()}
               disabled={!hasSelection}
-              className={`flex items-center gap-1.5 h-[31px] px-3 text-[12.5px] rounded-[10px] transition-colors duration-150 ${
+              className={`flex items-center gap-1.5 h-[31px] px-3 text-[12.5px] whitespace-nowrap rounded-[10px] transition-colors duration-150 ${
                 hasSelection
                   ? 'text-muted hover:bg-app'
                   : 'text-faint cursor-not-allowed'
@@ -144,14 +149,14 @@ export function ContentEditorDialog({
             </button>
             <button
               onClick={onClose}
-              className="h-[31px] px-4 text-[12.5px] rounded-[10px] text-muted hover:bg-app transition-colors duration-150"
+              className="h-[31px] px-4 text-[12.5px] whitespace-nowrap rounded-[10px] text-muted hover:bg-app transition-colors duration-150"
             >
               取消
             </button>
             <button
               onClick={() => void handleSave()}
               disabled={saving}
-              className={`h-[31px] px-5 text-[12.5px] rounded-[10px] font-medium transition-colors duration-150 ${
+              className={`h-[31px] px-5 text-[12.5px] whitespace-nowrap rounded-[10px] font-medium transition-colors duration-150 ${
                 saving
                   ? 'bg-accent-soft text-faint cursor-not-allowed'
                   : 'bg-accent text-on-accent hover:bg-accent-deep'
