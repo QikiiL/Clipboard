@@ -1,13 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "clipboard",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "identifier": "com.lyz.clipboard-manager-tauri",
   "mainBinaryName": "clipboard-manager-tauri",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build && cd src-tauri && cargo build --release --example sms-helper && copy /Y target\\release\\examples\\sms-helper.exe identity\\sms-helper.exe",
+    "beforeBuildCommand": "npm run build && cd src-tauri && cargo build --release --example sms-helper && copy /Y target\\release\\examples\\sms-helper.exe sms-helper.exe && copy /Y identity\\clipboard-identity.msix clipboard-identity.msix && copy /Y identity\\clipboard-identity.cer clipboard-identity.cer",
     "frontendDist": "../dist"
   },
   "app": {
@@ -28,9 +28,9 @@
       "nsis"
     ],
     "resources": [
-      "identity/clipboard-identity.msix",
-      "identity/clipboard-identity.cer",
-      "identity/sms-helper.exe"
+      "clipboard-identity.msix",
+      "clipboard-identity.cer",
+      "sms-helper.exe"
     ],
     "icon": [
       "icons/32x32.png",

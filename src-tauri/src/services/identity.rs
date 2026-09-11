@@ -87,6 +87,18 @@ pub fn relaunch_self_via_identity() -> Result<(), String> {
 /// 前提:稀疏包已注册且清单里含 Id="SmsHelper" 条目(调用方先 ensure)。
 #[allow(dead_code)]
 pub fn activate_helper() -> Result<u32, String> {
+    // 前置检查:helper exe 必须与主程序同目录。缺失时(安装异常/被安全软件
+    // 清理)绝不能发起 Shell 激活 —— 激活失败会弹「Windows 找不到文件」的
+    // 系统错误对话框(0.2.3 在用户机上实测),且无法从代码侧抑制。
+    // 缺失时静默返回 Err,调用方降级为 1s 轮询。
+    let helper = exe_dir().ok_or_else(|| "取不到当前 exe 所在目录".to_string())?;
+    let helper = helper.join("sms-helper.exe");
+    if !helper.is_file() {
+        return Err(
+            "sms-helper.exe 不存在于安装目录,跳过激活(短信捕获降级为 1s 轮询)".to_string(),
+        );
+    }
+
     unsafe {
         use windows::Win32::System::Com::{
             CoCreateInstance, CoInitializeEx, CLSCTX_LOCAL_SERVER, COINIT_APARTMENTTHREADED,

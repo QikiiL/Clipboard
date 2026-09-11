@@ -1,6 +1,6 @@
 {
-  "version": "0.2.3",
-  "notes": "修复 0.2.2 启动时弹出「不支持该请求」错误框的问题\n- 短信验证码捕获改为后台轻量监听进程,事件驱动、亚秒级,保持 0.2.2 的提速效果\n- 升级流程全自动:运行安装包一次,自动完成升级并重启",
+  "version": "0.2.4",
+  "notes": "修复部分电脑上短信监听进程路径错位导致的「找不到文件」弹窗\n- 短信验证码捕获保持亚秒级事件驱动\n- 升级流程全自动:运行安装包一次,自动完成升级并重启",
   "github": "https://github.com/QikiiL/Clipboard/releases",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
