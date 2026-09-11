@@ -306,6 +306,7 @@ pub fn run() {
             commands::clipboard::clear_history,
             commands::clipboard::pause_monitoring,
             commands::clipboard::get_image_base64,
+            commands::clipboard::update_item_content,
             commands::settings::save_settings,
             commands::settings::load_settings,
             commands::settings::allow_excluded_item,

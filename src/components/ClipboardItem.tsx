@@ -13,6 +13,7 @@ import {
   FolderIcon,
   FolderFillIcon,
   TrashIcon,
+  EyeIcon,
 } from './icons';
 
 // 图片缩略图经 asset 协议按需加载(不经 IPC/base64);
@@ -34,6 +35,7 @@ interface Props {
   onActivate: (item: ClipboardItemType) => void;
   onDelete: (id: number) => void;
   onToggleFavorite: (id: number) => void;
+  onPreview: (item: ClipboardItemType) => void;
 }
 
 const typeIcons: Record<ClipboardType, typeof TextIcon> = {
@@ -90,6 +92,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
   onActivate,
   onDelete,
   onToggleFavorite,
+  onPreview,
 }: Props) {
   const isImage = item.type === CT.Image;
   const imageSrc = isImage && item.file_path ? convertFileSrc(item.file_path) : null;
@@ -111,7 +114,25 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
     return () => window.removeEventListener('resize', onResize);
   }, []);
   const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  // 悬停「眼睛」时的全文气泡:position:fixed 跟随按钮矩形定位,
+  // 不参与虚拟列表的行高计算,避免悬停时列表抖动
+  const [contentTip, setContentTip] = useState<
+    { left: number; top: number; flipUp: boolean } | null
+  >(null);
   const groups = useClipboardStore((s) => s.groups);
+
+  const handleEyeEnter = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const TIP_W = 320; // 与气泡 maxWidth 保持一致,用于水平夹取
+    const GAP = 8;
+    const left = Math.min(
+      Math.max(GAP, rect.right - TIP_W),
+      Math.max(GAP, window.innerWidth - TIP_W - GAP),
+    );
+    // 按钮位于屏幕下半区时向上弹出,避免气泡超出视口底部
+    const flipUp = rect.top > window.innerHeight * 0.55;
+    setContentTip({ left, top: flipUp ? rect.top - GAP : rect.bottom + GAP, flipUp });
+  }, []);
 
   const handleMouseEnter = useCallback((e: React.MouseEvent) => {
     setMousePos({ x: e.clientX, y: e.clientY });
@@ -284,8 +305,20 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
           <span className="text-accent mr-2"><FolderFillIcon size={13} /></span>
         )}
         <span className="text-[11px] text-faint tabular-nums @max-narrow:hidden @min-wide:text-[12px]">{formatTime(item.last_used_at)}</span>
-        <div className="flex items-center pl-2 w-0 overflow-hidden group-hover:w-[90px] group-focus-within:w-[90px] transition-[width] duration-150 ease-out @max-narrow:pl-1 @max-narrow:group-hover:w-[74px] @max-narrow:group-focus-within:w-[74px] @min-wide:group-hover:w-[102px] @min-wide:group-focus-within:w-[102px]">
+        <div className="flex items-center pl-2 w-0 overflow-hidden group-hover:w-[118px] group-focus-within:w-[118px] transition-[width] duration-150 ease-out @max-narrow:pl-1 @max-narrow:group-hover:w-[98px] @max-narrow:group-focus-within:w-[98px] @min-wide:group-hover:w-[130px] @min-wide:group-focus-within:w-[130px]">
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150">
+            {!isImage && (
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onMouseEnter={handleEyeEnter}
+                onMouseLeave={() => setContentTip(null)}
+                onClick={(e) => { e.stopPropagation(); e.currentTarget.blur(); onPreview(item); }}
+                className="flex items-center justify-center w-[26px] h-[26px] rounded-[7px] text-faint hover:bg-hairline hover:text-muted transition-colors @max-narrow:w-[22px] @max-narrow:h-[22px]"
+                title="预览 / 编辑内容"
+              >
+                <EyeIcon size={14} />
+              </button>
+            )}
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.id); }}
@@ -313,6 +346,24 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
           </div>
         </div>
       </div>
+      {contentTip && (
+        <div
+          // 外层只负责定位与 flipUp 的 translateY,动画用仅含 opacity 的 clip-fade-in:
+          // clip-pop-in 会在动画结束时把 transform 覆盖为 none,导致向上弹出的气泡跳位。
+          className="fixed z-[9999] pointer-events-none clip-fade-in"
+          style={{
+            left: contentTip.left,
+            top: contentTip.top,
+            transform: contentTip.flipUp ? 'translateY(-100%)' : undefined,
+          }}
+        >
+          <div className="bg-surface rounded-lg shadow-dialog border border-hairline px-3 py-2 max-w-[320px] max-h-[45vh] overflow-hidden">
+            <p className="text-[12.5px] leading-relaxed text-ink whitespace-pre-wrap break-words">
+              {item.content}
+            </p>
+          </div>
+        </div>
+      )}
       {groupMenuOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setGroupMenuOpen(false); }} />

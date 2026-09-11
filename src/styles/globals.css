@@ -112,3 +112,22 @@
     background: transparent;
   }
 }
+
+/* 悬停气泡与编辑弹窗的入场动画(短、不做位移过大,避免干扰)。
+   clip-pop-in 含 transform:气泡在 flipUp 时需要内联 translateY(-100%) 定位,
+   若用 clip-pop-in,动画结束时的 transform:none 会覆盖内联值而跳位,
+   故气泡改用仅 opacity 的 clip-fade-in。 */
+@keyframes clip-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes clip-pop-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.clip-fade-in { animation: clip-fade-in 130ms ease-out; }
+.clip-pop-in { animation: clip-pop-in 150ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .clip-fade-in, .clip-pop-in { animation: none; }
+}

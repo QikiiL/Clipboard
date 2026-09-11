@@ -229,6 +229,48 @@ pub async fn get_image_base64(
     Ok(format!("data:{};base64,{}", mime, encoded))
 }
 
+/// 与采集端(ClipboardMonitor)完全一致的预览截断:前 100 个**字符**。
+/// 用 chars() 而非按字节切片 —— 中文/emoji 下按字节切会切出半个字符。
+pub(crate) fn build_preview(content: &str) -> String {
+    content.chars().take(100).collect()
+}
+
+/// 编辑条目内容:同步更新 content 与 preview,并重算 content_hash,
+/// 保证后续「内容去重」语义与采集端一致(否则编辑后同一内容会被当成新条目重复插入)。
+/// 仅由前端的文本预览/编辑弹窗调用;图片条目前端不提供入口。
+#[tauri::command]
+pub async fn update_item_content(
+    app_handle: tauri::AppHandle,
+    id: i64,
+    content: String,
+) -> Result<(), String> {
+    let db = app_handle.state::<SqlitePool>();
+    let preview = build_preview(&content);
+    let hash = crate::utils::hash::compute_hash(&content);
+
+    let result = sqlx::query(
+        "UPDATE items SET content = ?, preview = ?, content_hash = ? WHERE id = ?",
+    )
+    .bind(&content)
+    .bind(&preview)
+    .bind(&hash)
+    .bind(id)
+    .execute(&*db)
+    .await
+    .map_err(|e| e.to_string())?;
+
+    if result.rows_affected() == 0 {
+        return Err("Item not found".to_string());
+    }
+
+    // 让列表按新内容重查(前端监听 clipboard-changed 后整表刷新)
+    let _ = app_handle.emit(
+        "clipboard-changed",
+        serde_json::json!({"action": "updated", "id": id}),
+    );
+    Ok(())
+}
+
 fn detect_image_mime(bytes: &[u8]) -> &'static str {
     if bytes.len() >= 4 && bytes[..4] == [0x89, 0x50, 0x4E, 0x47] {
         "image/png"
@@ -240,5 +282,22 @@ fn detect_image_mime(bytes: &[u8]) -> &'static str {
         "image/webp"
     } else {
         "image/png"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preview_truncates_on_char_boundary() {
+        let preview = build_preview(&"验".repeat(150));
+        assert_eq!(preview.chars().count(), 100);
+        assert_eq!(preview, "验".repeat(100));
+    }
+
+    #[test]
+    fn preview_keeps_short_content() {
+        assert_eq!(build_preview("hello"), "hello");
     }
 }
