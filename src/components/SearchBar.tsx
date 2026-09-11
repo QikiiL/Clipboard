@@ -32,8 +32,8 @@ export function SearchBar() {
   }, []);
 
   return (
-    <div className="px-4 pt-3 pb-2.5">
-      <div className="flex items-center gap-2 h-9 rounded-xl bg-surface shadow-lift px-3 text-faint focus-within:outline-2 focus-within:outline-accent-soft">
+    <div className="px-4 pt-3 pb-2.5 @max-narrow:px-2.5 @max-narrow:pt-2 @max-narrow:pb-2 @min-wide:px-5 @min-wide:pt-3.5 @min-wide:pb-3">
+      <div className="flex items-center gap-2 h-9 rounded-xl bg-surface shadow-lift px-3 text-faint focus-within:outline-2 focus-within:outline-accent-soft @max-narrow:h-8 @max-narrow:px-2.5 @min-wide:h-10 @min-wide:px-3.5">
         <SearchIcon size={14} />
         <input
           ref={inputRef}
@@ -41,7 +41,7 @@ export function SearchBar() {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="搜索剪贴板…"
-          className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] text-ink placeholder:text-faint"
+          className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13px] text-ink placeholder:text-faint @max-narrow:text-[12px] @min-wide:text-[14px]"
         />
         {inputValue && (
           <button

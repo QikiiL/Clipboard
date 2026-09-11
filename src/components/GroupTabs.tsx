@@ -7,7 +7,7 @@ import { PlusIcon, StarIcon } from './icons';
 import { PromptDialog, ConfirmDialog } from './Dialogs';
 
 const tabBase =
-  'flex-shrink-0 flex items-center gap-1.5 px-[13px] py-[5.5px] text-[12.5px] rounded-full transition-[background-color,color,box-shadow] duration-150';
+  'flex-shrink-0 flex items-center gap-1.5 px-[13px] py-[5.5px] text-[12.5px] rounded-full transition-[background-color,color,box-shadow] duration-150 @max-narrow:px-[9px] @max-narrow:py-[4px] @max-narrow:text-[12px] @min-wide:px-[15px] @min-wide:py-[6px] @min-wide:text-[13px]';
 const tabIdle = `${tabBase} bg-surface shadow-lift text-muted hover:text-faint hover:shadow-lift-hover`;
 const tabActive = `${tabBase} bg-accent-soft text-accent font-semibold ring-1 ring-inset ring-accent-ring`;
 
@@ -71,7 +71,7 @@ export function GroupTabs() {
 
   return (
     <>
-      <div className="flex items-center gap-[7px] px-4 pt-1 pb-3 overflow-x-auto">
+      <div className="flex items-center gap-[7px] px-4 pt-1 pb-3 overflow-x-auto @max-narrow:gap-[5px] @max-narrow:px-2.5 @max-narrow:pb-2 @min-wide:gap-2 @min-wide:px-5 @min-wide:pb-3.5">
         <button
           onClick={handleShowAll}
           className={!showFavorites && selectedGroup === null ? tabActive : tabIdle}

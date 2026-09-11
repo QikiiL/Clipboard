@@ -150,7 +150,7 @@ export function StatusBar() {
   }, []);
 
   return (
-    <div className="flex items-center justify-between h-9 px-4 border-t border-hairline text-[11px] text-faint tabular-nums gap-3">
+    <div className="flex items-center justify-between h-9 px-4 border-t border-hairline text-[11px] text-faint tabular-nums gap-3 @max-narrow:h-8 @max-narrow:px-2.5 @max-narrow:text-[10px] @min-wide:h-10 @min-wide:px-5 @min-wide:text-[12px]">
       {/* 左:统计。文本不换行(nowrap),容器 min-w-0+overflow-hidden
           允许窗口极窄时被裁剪。dbSize/appVersion 是次要信息,窄屏隐藏。
           右:粘贴模式+状态。flex-shrink-0 防止按钮被压成两行 */}
@@ -158,7 +158,7 @@ export function StatusBar() {
         <span className="whitespace-nowrap">共 {totalCount} 条</span>
         <span className="whitespace-nowrap">{favoriteCount} 收藏</span>
         {dbSize !== null && (
-          <span className="hidden sm:inline whitespace-nowrap">{formatSize(dbSize)}</span>
+          <span className="hidden @min-wide:inline whitespace-nowrap">{formatSize(dbSize)}</span>
         )}
         {appVersion && (
           // flex-shrink-0 保证版本号永远不被裁剪;不写 hidden md:inline
@@ -171,7 +171,7 @@ export function StatusBar() {
         <button
           onClick={handleTogglePasteMode}
           title="切换单击条目的行为(粘贴到之前点击的输入框 / 仅复制到剪贴板)"
-          className={`flex items-center gap-1.5 px-[11px] py-[3px] rounded-full transition-[background-color,color,box-shadow] duration-150 whitespace-nowrap ${
+          className={`flex items-center gap-1.5 px-[11px] py-[3px] rounded-full transition-[background-color,color,box-shadow] duration-150 whitespace-nowrap @max-narrow:px-2 @max-narrow:py-[2px] ${
             pasteMode
               ? 'bg-accent-soft text-accent font-semibold ring-1 ring-inset ring-accent-ring'
               : 'bg-surface shadow-lift text-muted hover:shadow-lift-hover'
@@ -202,7 +202,7 @@ export function StatusBar() {
               role="status"
               aria-live="polite"
               aria-label="排除规则提示"
-              className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3"
+              className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3 @max-narrow:p-4 @max-narrow:max-w-[92%]"
             >
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-warn flex-shrink-0" aria-hidden="true" />
@@ -236,7 +236,7 @@ export function StatusBar() {
               role="status"
               aria-live="polite"
               aria-label="验证码已复制提示"
-              className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3"
+              className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3 @max-narrow:p-4 @max-narrow:max-w-[92%]"
             >
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-ok flex-shrink-0" aria-hidden="true" />

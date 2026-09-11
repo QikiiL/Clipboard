@@ -65,7 +65,7 @@ export function ClipboardList() {
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 pt-1 pb-2.5">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 pt-1 pb-2.5 @max-narrow:px-2 @min-wide:px-4">
       <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const item = items[virtualRow.index];

@@ -74,6 +74,15 @@
   --font-sans: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', system-ui, sans-serif;
 }
 
+/* 面板宽度自适应断点(容器查询)。面板宽度只有 370~600px,
+   1366/1920/3840 之类的视口断点永远不会触发,故按“面板自身宽度”分三档:
+   窄 < 22.5rem(360px) / 标准 / 宽 ≥ 32.5rem(520px)。
+   根节点 App.tsx 上加了 @container,组件用 @max-narrow: / @min-wide: 变体命中。 */
+@theme {
+  --container-narrow: 22.5rem;
+  --container-wide: 32.5rem;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {

@@ -96,9 +96,11 @@ pub fn create_main_window(app: &AppHandle, show_when_ready: bool) -> tauri::Resu
 
     let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("剪贴板管理器 (Clipboard)")
-        // 默认尺寸取自用户实测偏好(461×569 物理 @125% 缩放);
-        // 老用户由 window-state.json 精确恢复,此值仅首次启动时生效
+        // 初始尺寸仅作占位(基准 370×455 逻辑):随后 apply_initial_geometry 会按
+        // 目标显示器与缩放重算(老用户跨 DPI 还原,新用户按屏幕相对 1080p 缩放)
         .inner_size(370.0, 455.0)
+        // 最小尺寸(逻辑单位):防用户拖到不可用;与 window_sizing 的钳制下限一致
+        .min_inner_size(crate::utils::window_sizing::MIN_W, crate::utils::window_sizing::MIN_H)
         .resizable(true)
         .decorations(false)
         .shadow(true)
@@ -118,22 +120,9 @@ pub fn create_main_window(app: &AppHandle, show_when_ready: bool) -> tauri::Resu
     }
     let window = builder.build()?;
 
-    // 恢复上次的窗口几何位置:销毁重建不像 hide/show 那样由系统免费保留位置
-    if let (Some(x), Some(y)) = (state.x, state.y) {
-        if position_on_screen(app, x, y) {
-            let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
-        }
-    }
-    match (state.w, state.h) {
-        // 恢复用户上次的尺寸;首次使用(无记录)默认 461×569 物理像素,
-        // 与显示缩放无关,所有机器首开都是同一尺寸
-        (Some(w), Some(h)) => {
-            let _ = window.set_size(tauri::PhysicalSize::new(w, h));
-        }
-        _ => {
-            let _ = window.set_size(tauri::PhysicalSize::new(461, 569));
-        }
-    }
+    // 自适应尺寸 + DPI 感知定位:按鼠标所在显示器的工作区与缩放因子,
+    // 计算并钳制面板尺寸与位置(销毁重建不像 hide/show 那样由系统免费保留几何)
+    crate::utils::window_sizing::apply_initial_geometry(app, &window, &state);
     if state.maximized {
         let _ = window.maximize();
     }
@@ -144,6 +133,8 @@ pub fn create_main_window(app: &AppHandle, show_when_ready: bool) -> tauri::Resu
     // 几何状态由移动/缩放事件实时持久化到独立文件(不进 AppSettings:
     // 前端设置面板即改即存会整体回传设置对象,曾把几何字段清空)
     register_geometry_persistence(&window);
+    // 面板被拖到缩放因子不同的显示器时,保持逻辑尺寸并重新钳制进新工作区
+    register_dpi_handler(&window);
     // 以下是每次重建都必须重新挂上的窗口级接线
     register_close_handler(&window);
     crate::utils::webview_control::apply_memory_optimizations(app);
@@ -160,6 +151,10 @@ pub struct WindowState {
     pub w: Option<u32>,
     pub h: Option<u32>,
     pub maximized: bool,
+    /// 保存 w/h 时所在显示器的缩放因子。跨 DPI 显示器时用它把物理尺寸还原回
+    /// 逻辑尺寸再换算,保证视觉大小一致;`#[serde(default)]` 兼容无此字段的旧文件。
+    #[serde(default)]
+    pub scale: Option<f64>,
 }
 
 fn window_state_path() -> std::path::PathBuf {
@@ -203,10 +198,34 @@ fn register_geometry_persistence(window: &tauri::WebviewWindow) {
             if !maximized {
                 s.w = Some(size.width);
                 s.h = Some(size.height);
+                // 一并记录当前缩放因子:跨 DPI 重建时按“逻辑尺寸”还原,视觉大小不跳变。
+                // 读不到时保留旧值(老文件就是 None,按当前 scale 处理)
+                s.scale = win.scale_factor().ok().or(s.scale);
             }
             save_window_state(&s);
         }
         _ => {}
+    });
+}
+
+/// 监听缩放因子变化(面板被拖到另一块 DPI 不同的显示器):
+/// 保持逻辑尺寸不变,再钳制进新显示器工作区。只在缩放变化时动作,
+/// 不触碰用户手动调整的尺寸。
+fn register_dpi_handler(window: &tauri::WebviewWindow) {
+    let win = window.clone();
+    window.on_window_event(move |event| {
+        if let tauri::WindowEvent::ScaleFactorChanged {
+            scale_factor,
+            new_inner_size,
+            ..
+        } = event
+        {
+            crate::utils::window_sizing::handle_scale_factor_changed(
+                &win,
+                *scale_factor,
+                *new_inner_size,
+            );
+        }
     });
 }
 
@@ -265,19 +284,4 @@ fn ensure_focus(window: tauri::WebviewWindow) {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     });
-}
-
-/// 保存的窗口坐标是否落在任一显示器范围内(拔掉显示器后窗口不会“消失”在屏外)
-fn position_on_screen(app: &AppHandle, x: i32, y: i32) -> bool {
-    match app.available_monitors() {
-        Ok(monitors) => monitors.iter().any(|m| {
-            let pos = m.position();
-            let size = m.size();
-            x >= pos.x
-                && y >= pos.y
-                && x < pos.x + size.width as i32
-                && y < pos.y + size.height as i32
-        }),
-        Err(_) => true, // 查询失败时不拦截,交给系统兜底
-    }
 }

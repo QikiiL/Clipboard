@@ -214,8 +214,8 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
             onMouseLeave={handleMouseLeave}
           />
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] leading-snug text-ink truncate">{formatImageTitle(item.created_at)}</p>
-            <p className="mt-0.5 text-[11px] text-faint tabular-nums truncate">{metaParts.join(' · ')}</p>
+            <p className="text-[13px] leading-snug text-ink truncate @max-narrow:text-[12.5px] @min-wide:text-[13.5px]">{formatImageTitle(item.created_at)}</p>
+            <p className="mt-0.5 text-[11px] text-faint tabular-nums truncate @max-narrow:hidden">{metaParts.join(' · ')}</p>
           </div>
           {mousePos && (
             <div
@@ -246,7 +246,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
 
   return (
     <div
-      className="group relative flex items-center gap-2.5 min-h-[52px] p-[10px] rounded-[10px] cursor-pointer transition-[background-color,box-shadow] duration-150 hover:bg-surface hover:shadow-lift"
+      className="group relative flex items-center gap-2.5 min-h-[52px] p-[10px] rounded-[10px] cursor-pointer transition-[background-color,box-shadow] duration-150 hover:bg-surface hover:shadow-lift @max-narrow:gap-2 @max-narrow:min-h-[46px] @max-narrow:p-2 @min-wide:gap-3 @min-wide:min-h-[60px] @min-wide:p-3"
       onClick={() => onActivate(item)}
     >
       {!(isImage && imageSrc && !imageFailed) && (
@@ -265,13 +265,13 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
             const { name, meta } = getFileMeta(item.content);
             return (
               <>
-                <p className="text-[13px] leading-snug text-ink truncate">{name}</p>
-                <p className="mt-0.5 text-[11px] text-faint tabular-nums truncate">{meta}</p>
+                <p className="text-[13px] leading-snug text-ink truncate @max-narrow:text-[12.5px] @min-wide:text-[13.5px]">{name}</p>
+                <p className="mt-0.5 text-[11px] text-faint tabular-nums truncate @max-narrow:hidden">{meta}</p>
               </>
             );
           })()
         ) : (
-          <p className={`text-[13px] leading-snug truncate ${item.type === CT.Link ? 'text-accent' : 'text-ink'}`}>
+          <p className={`text-[13px] leading-snug truncate @max-narrow:text-[12.5px] @min-wide:text-[13.5px] ${item.type === CT.Link ? 'text-accent' : 'text-ink'}`}>
             {item.preview || item.content}
           </p>
         )}
@@ -283,13 +283,13 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
         {item.group_id !== null && (
           <span className="text-accent mr-2"><FolderFillIcon size={13} /></span>
         )}
-        <span className="text-[11px] text-faint tabular-nums">{formatTime(item.last_used_at)}</span>
-        <div className="flex items-center pl-2 w-0 overflow-hidden group-hover:w-[90px] group-focus-within:w-[90px] transition-[width] duration-150 ease-out">
+        <span className="text-[11px] text-faint tabular-nums @max-narrow:hidden @min-wide:text-[12px]">{formatTime(item.last_used_at)}</span>
+        <div className="flex items-center pl-2 w-0 overflow-hidden group-hover:w-[90px] group-focus-within:w-[90px] transition-[width] duration-150 ease-out @max-narrow:pl-1 @max-narrow:group-hover:w-[74px] @max-narrow:group-focus-within:w-[74px] @min-wide:group-hover:w-[102px] @min-wide:group-focus-within:w-[102px]">
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150">
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => { e.stopPropagation(); onToggleFavorite(item.id); }}
-              className="flex items-center justify-center w-[26px] h-[26px] rounded-[7px] text-faint hover:bg-hairline hover:text-muted transition-colors"
+              className="flex items-center justify-center w-[26px] h-[26px] rounded-[7px] text-faint hover:bg-hairline hover:text-muted transition-colors @max-narrow:w-[22px] @max-narrow:h-[22px]"
               title={item.is_favorite ? '取消收藏' : '收藏'}
             >
               {item.is_favorite ? <StarIcon size={14} /> : <StarOutlineIcon size={14} />}
@@ -297,7 +297,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => { e.stopPropagation(); setGroupMenuOpen((v) => !v); }}
-              className="flex items-center justify-center w-[26px] h-[26px] rounded-[7px] text-faint hover:bg-hairline hover:text-muted transition-colors"
+              className="flex items-center justify-center w-[26px] h-[26px] rounded-[7px] text-faint hover:bg-hairline hover:text-muted transition-colors @max-narrow:w-[22px] @max-narrow:h-[22px]"
               title={item.group_id !== null ? '更改分组' : '归入分组'}
             >
               {item.group_id !== null ? <FolderFillIcon size={14} /> : <FolderIcon size={14} />}
@@ -305,7 +305,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
             <button
               onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
-              className="flex items-center justify-center w-[26px] h-[26px] rounded-[7px] text-faint hover:bg-hairline hover:text-danger transition-colors"
+              className="flex items-center justify-center w-[26px] h-[26px] rounded-[7px] text-faint hover:bg-hairline hover:text-danger transition-colors @max-narrow:w-[22px] @max-narrow:h-[22px]"
               title="删除"
             >
               <TrashIcon size={14} />
