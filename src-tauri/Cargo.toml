@@ -1,13 +1,13 @@
 [package]
 name = "clipboard-manager-tauri"
-version = "0.3.1"
+version = "0.4.0"
 description = "A clipboard manager built with Tauri"
 authors = ["you"]
 edition = "2021"
 
 # 发布构建:链接期优化 + 去符号,减小体积与常驻内存
 [profile.release]
-lto = true
+lto = "thin"
 strip = true
 
 [lib]
