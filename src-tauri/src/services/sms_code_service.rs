@@ -48,6 +48,21 @@ type SeenSet = HashSet<(String, u32)>;
 /// `Microsoft.YourPhone_8wekyb3d8bbwe!YourPhone`,前缀匹配即可覆盖
 const PHONE_LINK_AUMID_PREFIX: &str = "microsoft.yourphone";
 
+/// Windows 纪元(1601-01-01)与 Unix 纪元(1970-01-01)的秒差
+const WIN_EPOCH_DIFF_SECS: u64 = 11_644_473_600;
+
+/// 本会话起点,WinRT DateTime 的 100ns 刻度数(自 1601-01-01 起)。
+/// 捕获门槛:创建时间晚于该点的通知才算"新"。启动播种靠内存已见集合,
+/// 首轮查询一旦失败或返回空列表,通知中心里的旧验证码 toast 就会被
+/// 兜底轮询全部当"新通知"重新捕获 —— 时间过滤是无条件兜底:
+/// 软件关闭期间收到的验证码永远不属于本会话
+fn session_start_ticks() -> i64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    ((now.as_secs() + WIN_EPOCH_DIFF_SECS) * 10_000_000 + now.subsec_nanos() as u64 / 100) as i64
+}
+
 pub fn set_enabled(v: bool) {
     ENABLED.store(v, Ordering::Relaxed);
 }
@@ -114,12 +129,14 @@ pub fn spawn(app_handle: tauri::AppHandle) {
         };
 
         let mut seen: SeenSet = HashSet::new();
+        // 会话起点:创建时间早于它的通知一律不捕获(见 session_start_ticks)
+        let session_start = session_start_ticks();
 
         // 先初始轮询播种已见集合,再订阅事件(顺序不能反):启动时通知中心里
         // 已存在的旧 toast 记为已见但**不捕获**(capture=false)——否则每次
         // 进程启动,还留在通知中心的旧验证码 toast 都会被重新提取、写剪贴板、
         // 重复入库(与 sms-helper 播种逻辑同源,语义保持一致)
-        if let Err(e) = poll_once(&listener, &mut seen, &app_handle, false) {
+        if let Err(e) = poll_once(&listener, &mut seen, &app_handle, false, session_start) {
             eprintln!("[sms-code] 初始轮询失败(由兜底轮询稍后重试): {}", e);
         }
 
@@ -246,7 +263,7 @@ pub fn spawn(app_handle: tauri::AppHandle) {
                 continue;
             }
 
-            match poll_once(&listener, &mut seen, &app_handle, true) {
+            match poll_once(&listener, &mut seen, &app_handle, true, session_start) {
                 Ok(_) => last_error = None,
                 Err(e) => {
                     eprintln!("[sms-code] 轮询失败(权限或系统服务): {}", e);
@@ -323,6 +340,8 @@ fn subscribe_event(
 /// 一轮轮询。返回本轮新处理的验证码条数。
 /// `capture=false` 时只播种已见集合、不捕获(启动时把通知中心里已有的
 /// 旧 toast 标记为已见 —— 否则每次进程启动都会把旧验证码重复复制、入库)。
+/// `session_start` 之前的创建的通知一律不捕获:播种靠内存集合,首轮查询
+/// 失败/返回空时旧通知会漏标记,时间是靠得住的无条件兜底。
 /// 已见集合按 TeleLink 的方式修剪:通知从通知中心消失后,同 id 的
 /// 新通知(Windows 会复用小整数 id)不应被误判为已见
 fn poll_once(
@@ -330,6 +349,7 @@ fn poll_once(
     seen: &mut SeenSet,
     app_handle: &tauri::AppHandle,
     capture: bool,
+    session_start: i64,
 ) -> windows::core::Result<usize> {
     let notifications = listener
         .GetNotificationsAsync(NotificationKinds::Toast)?
@@ -356,6 +376,16 @@ fn poll_once(
             continue;
         }
         seen.insert(key);
+
+        // 会话开始前创建的通知(软件关闭期间收到的验证码)永不捕获;
+        // CreationTime 拿不到时按"新通知"处理,宁可多看一眼不可静默漏掉
+        let created_before_session = match note.CreationTime() {
+            Ok(t) => t.UniversalTime < session_start,
+            Err(_) => false,
+        };
+        if created_before_session {
+            continue;
+        }
 
         // 播种轮(capture=false)只记已见:启动时已存在的旧 toast 一律不处理
         if capture {
@@ -621,6 +651,16 @@ fn looks_like_date(digits: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_start_ticks_is_plausible() {
+        // 会话起点必须晚于 2020-01-01(WinRT 刻度),且接近当下:
+        // 大于 2020、小于"2020 + 100 年",防止纪元换算写错方向
+        let ticks_2020: i64 = (1_577_836_800 + WIN_EPOCH_DIFF_SECS as i64) * 10_000_000;
+        let now = session_start_ticks();
+        assert!(now > ticks_2020);
+        assert!(now < ticks_2020 + 100i64 * 365 * 24 * 3600 * 10_000_000);
+    }
 
     #[test]
     fn test_chinese_code_sms() {

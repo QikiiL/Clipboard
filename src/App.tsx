@@ -40,12 +40,12 @@ function AppContent() {
     useContinuousPasteStore.getState().refreshStatus();
   }, []);
 
-  // 启动时静默检查更新;同一新版本只提醒一次(记录在 localStorage,
-  // 窗口销毁重建后不会重复弹窗),用户可在设置里随时手动检查。
-  // 加 4 小时节流:窗口是"隐藏即销毁、唤出即重建",每次唤出都会重挂本组件,
-  // 不限流的话每次按热键唤出都会发起一轮网络检查(代理/直连/镜像共三次尝试)
+  // 更新检查:唤出窗口(窗口重建)时检查一次,30 分钟节流。节流起点是
+  // 上一次实际发出请求的时刻(检查前写入 localStorage,跨窗口销毁存活)。
+  // 后台另有常驻监视任务每 2 小时主动检查并通知(见 update.rs),这里只是
+  // 补充:用户唤出面板时尽快给出应用内提示
   useEffect(() => {
-    const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+    const CHECK_INTERVAL_MS = 30 * 60 * 1000;
     const last = Number(localStorage.getItem('clipboard-update-checked-at') ?? 0);
     if (Number.isFinite(last) && last > 0 && Date.now() - last < CHECK_INTERVAL_MS) {
       return;
@@ -62,6 +62,21 @@ function AppContent() {
         }
       })
       .catch(() => {});
+  }, []);
+
+  // 后台监视任务发现新版本(面板可见时):直接弹更新对话框,
+  // 同样尊重「本版本已忽略」标记,避免后台事件把用户关掉的对话框又顶回来
+  useEffect(() => {
+    const unlisten = listen<UpdateInfo>('update-available', (e) => {
+      const info = e.payload;
+      if (
+        info.has_update &&
+        localStorage.getItem('clipboard-update-dismissed') !== info.latest
+      ) {
+        setUpdateInfo(info);
+      }
+    });
+    return () => { unlisten.then((fn) => fn()); };
   }, []);
 
   useEffect(() => {

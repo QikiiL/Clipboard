@@ -1,4 +1,5 @@
 use serde::Serialize;
+use tauri::{Emitter, Manager};
 
 /// 版本信息文件主地址(GitHub raw)
 const VERSION_JSON_URL: &str = "https://raw.githubusercontent.com/QikiiL/Clipboard/master/version.json";
@@ -100,6 +101,11 @@ fn version_tuple(v: &str) -> (u64, u64, u64) {
 /// 网络再慢也不影响 UI 响应。网络失败直接报错,由前端按"检查失败"展示。
 #[tauri::command]
 pub async fn check_update(app: tauri::AppHandle) -> Result<UpdateInfo, String> {
+    check_update_inner(&app).await
+}
+
+/// 检查更新核心(前端命令与后台监视任务共用)
+pub async fn check_update_inner(app: &tauri::AppHandle) -> Result<UpdateInfo, String> {
     let current = app
         .config()
         .version
@@ -141,6 +147,58 @@ pub async fn check_update(app: tauri::AppHandle) -> Result<UpdateInfo, String> {
     })
     .await
     .map_err(|e| format!("更新检查任务失败: {}", e))?
+}
+
+/// 后台更新监视:常驻任务每 2 小时检查一次(tokio interval 首次 tick 立即执行,
+/// 开机即查一次)。
+///
+/// 为什么需要它:窗口"隐藏即销毁、唤出即重建",更新检查原本只挂在窗口
+/// 创建时 —— 用户不唤出面板就永远不会检查,新版本发布后可能好几天无人知晓。
+/// 发现新版本时按窗口状态二选一:
+/// - 面板可见 → 直接发 `update-available` 事件,前端弹更新对话框;
+/// - 面板不可见(多数时间)→ 发 Windows 系统通知,不打断当前工作。
+/// 两个渠道各自每会话最多提醒一次:用户没升级也不反复轰炸,
+/// 应用重启后(若仍是旧版)会再提醒一次。
+pub fn spawn_update_watcher(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let mut ticker =
+            tokio::time::interval(std::time::Duration::from_secs(2 * 60 * 60));
+        let mut event_notified = false;
+        let mut toast_notified = false;
+        loop {
+            ticker.tick().await;
+            if event_notified && toast_notified {
+                continue;
+            }
+            let Ok(info) = check_update_inner(&app).await else {
+                // 无网/镜像故障:静默,下个周期再试
+                continue;
+            };
+            if !info.has_update {
+                continue;
+            }
+            let visible = app
+                .get_webview_window("main")
+                .map(|w| w.is_visible().unwrap_or(false))
+                .unwrap_or(false);
+            if visible && !event_notified {
+                event_notified = true;
+                let _ = app.emit("update-available", info);
+            } else if !visible && !toast_notified {
+                use tauri_plugin_notification::NotificationExt;
+                toast_notified = true;
+                let _ = app
+                    .notification()
+                    .builder()
+                    .title("剪贴板管理器有新版本")
+                    .body(format!(
+                        "v{} 已发布,唤出面板即可查看更新内容并下载",
+                        info.latest
+                    ))
+                    .show();
+            }
+        }
+    });
 }
 
 /// 写入纯文本到系统剪贴板(复制蓝奏云密码用)

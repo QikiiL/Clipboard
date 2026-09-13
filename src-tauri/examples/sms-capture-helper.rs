@@ -54,6 +54,21 @@ const ERROR_ALREADY_EXISTS: u32 = 183;
 /// 已见通知的 (aumid, id) 集合。轮询线程独占访问即可,不必上锁
 type SeenSet = HashSet<(String, u32)>;
 
+/// Windows 纪元(1601-01-01)与 Unix 纪元(1970-01-01)的秒差
+const WIN_EPOCH_DIFF_SECS: u64 = 11_644_473_600;
+
+/// 本会话起点,WinRT DateTime 的 100ns 刻度数(自 1601-01-01 起)。
+/// 捕获门槛:创建时间晚于该点的通知才算"新"。与主程序
+/// sms_code_service::session_start_ticks 同源 —— 播种靠内存已见集合,
+/// 首轮查询失败/返回空列表时旧 toast 会被兜底轮询重新捕获,
+/// 创建时间过滤是无条件兜底:软件重启前的旧验证码永远不算"新通知"
+fn session_start_ticks() -> i64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    ((now.as_secs() + WIN_EPOCH_DIFF_SECS) * 10_000_000 + now.subsec_nanos() as u64 / 100) as i64
+}
+
 fn main() {
     // --parent <pid>:主程序激活时传入自己的进程 ID(看门狗用)
     let parent_pid: u32 = std::env::args()
@@ -106,9 +121,11 @@ fn main() {
 
     // 播种:启动时先把通知中心里已有的旧验证码 toast 标记为已见、不写剪贴板,
     // 避免 helper 每次重启都把旧码重复复制、覆盖用户当前剪贴板内容。
-    // 播种后的 seen 集合随参数传入 event_loop,保证去重连续性
+    // 播种后的 seen 集合随参数传入 event_loop,保证去重连续性;
+    // 会话起点时间过滤是无条件兜底(播种轮询失败/返回空时旧码也不会复活)
     let mut seen: SeenSet = HashSet::new();
-    match poll_once(&listener, &mut seen, false) {
+    let session_start = session_start_ticks();
+    match poll_once(&listener, &mut seen, false, session_start) {
         Ok(n) => log(&format!("播种完成:已见 {n} 条历史通知(不捕获)")),
         Err(e) => log(&format!("播种轮询失败(不影响后续捕获): {e}")),
     }
@@ -140,7 +157,7 @@ fn main() {
         }
     };
 
-    event_loop(&listener, wake_rx, parent_pid, seen);
+    event_loop(&listener, wake_rx, parent_pid, seen, session_start);
 }
 
 /// 事件驱动 + 兜底轮询主循环:
@@ -152,6 +169,7 @@ fn event_loop(
     wake_rx: std::sync::mpsc::Receiver<()>,
     parent_pid: u32,
     mut seen: SeenSet,
+    session_start: i64,
 ) {
     let mut last_watchdog = std::time::Instant::now();
     let started = std::time::Instant::now();
@@ -192,7 +210,7 @@ fn event_loop(
             continue;
         }
 
-        match poll_once(listener, &mut seen, true) {
+        match poll_once(listener, &mut seen, true, session_start) {
             Ok(hits) => {
                 if hits > 0 {
                     log(&format!("本轮捕获 {hits} 条验证码"));
@@ -207,12 +225,15 @@ fn event_loop(
 /// `capture=false` 时只播种已见集合、不写剪贴板(用于启动时把通知中心里
 /// 已有的旧验证码 toast 标记为已见,避免 helper 每次重启都重复复制旧码、
 /// 覆盖用户当前剪贴板)。
+/// `session_start` 之前创建的通知一律不捕获:播种靠内存集合,首轮查询
+/// 失败/返回空时旧通知会漏标记,创建时间是靠得住的无条件兜底。
 /// 逻辑与主程序 sms_code_service::poll_once 同源(去掉前端/系统通知部分,
 /// helper 无 UI),去重键 (aumid, id) + 修剪已见集合的语义保持一致
 fn poll_once(
     listener: &UserNotificationListener,
     seen: &mut SeenSet,
     capture: bool,
+    session_start: i64,
 ) -> windows::core::Result<usize> {
     let notifications = listener
         .GetNotificationsAsync(NotificationKinds::Toast)?
@@ -239,6 +260,16 @@ fn poll_once(
             continue;
         }
         seen.insert(key);
+
+        // 会话开始前创建的通知(helper 重启前收到的验证码)永不捕获;
+        // CreationTime 拿不到时按"新通知"处理,宁可多看一眼不可静默漏掉
+        let created_before_session = match note.CreationTime() {
+            Ok(t) => t.UniversalTime < session_start,
+            Err(_) => false,
+        };
+        if created_before_session {
+            continue;
+        }
 
         if capture {
             if let Some((sender, body)) = extract_toast_texts(&note) {

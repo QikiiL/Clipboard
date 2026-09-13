@@ -208,6 +208,10 @@ pub fn run() {
             services::sms_code_service::set_enabled(saved_settings.sms_code_enabled);
             services::sms_code_service::spawn(app.handle().clone());
 
+            // 后台更新监视:每 2 小时主动检查,发现新版本走前端事件/系统通知。
+            // 前端唤出时的检查保留(30 分钟节流),但用户不唤出面板也能被通知到
+            commands::update::spawn_update_watcher(app.handle().clone());
+
             // Register global hotkey and track it for unregistration.
             // If the user has a custom hotkey, register that instead of the default
             // Ctrl+Shift+V.
