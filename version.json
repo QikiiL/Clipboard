@@ -1,7 +1,7 @@
 {
-  "version": "0.4.3",
-  "notes": "修复版本\n- 修复连续粘贴框选时,拖拽中用滚轮翻页会丢失已框选内容的问题\n- 框选改为累积制:滚轮翻页、分屏多次拖拽,选择持续累加不丢失\n- 误选可单击条目取消,或用「清空」按钮/点击列表空白处重来",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v0.4.3",
+  "version": "0.4.4",
+  "notes": "修复版本\n- 连续粘贴改为真·先进先出:最早复制的内容最先粘贴(序号①在列表最下方选中项上),还原复制时的先后顺序\n- 修复窗口较窄时每条记录的时间显示整体消失的问题:任何窗口宽度都显示完整的相对时间(如21分钟前)",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v0.4.4",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }
