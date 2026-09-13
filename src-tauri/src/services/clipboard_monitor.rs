@@ -291,9 +291,28 @@ impl ClipboardMonitor {
             // 也省掉每 500ms 一次的状态查找
             let exclusion = app_handle.try_state::<ExclusionState>();
 
+            // 播种:启动时先读一次当前剪贴板,把内容 hash 记入 last_hash 但**不入库**。
+            // 不播种的话,首轮轮询会把"启动前就留在剪贴板里的内容"重新入库:
+            // 库里有同条则被 UPDATE last_used_at 顶到最上面(时间显示"刚刚"),
+            // 用户删掉记录后重启还会再次生成 —— 表现为"每次打开软件都重复记录
+            // 同一条"。启动后新复制的内容 hash 不同,照常捕获;软件未运行期间的
+            // 复制本来就不入历史,与短信捕获的会话起点语义一致
+            let seed = tokio::task::spawn_blocking(read_clipboard_content)
+                .await
+                .unwrap_or(None);
+            if let Some(captured) = seed {
+                let seed_hash = if let Some(ih) = captured.image_hash {
+                    ih
+                } else {
+                    compute_hash(&captured.content)
+                };
+                *monitor.last_hash.lock().await = seed_hash;
+            }
+
             // 启动捕获由下方轮询循环完成:tokio interval 的首次 tick 立即到期,
-            // 与后续读取共用同一套去重/入库/发事件逻辑(独一份,避免双份维护),
-            // 且首次捕获到新条目时也会发事件,前端首屏加载后能及时刷新出来
+            // 与后续读取共用同一套去重/入库/发事件逻辑(独一份,避免双份维护)。
+            // 首轮读到的是播种过的内容,直接跳过;真正的启动捕获只发生在
+            // 软件运行期间发生的新复制
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
             loop {
                 interval.tick().await;
