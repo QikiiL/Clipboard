@@ -178,6 +178,10 @@ pub fn run() {
             // 单击条目的目标行为(默认粘贴,可在状态栏手动切换)与粘贴目标窗口
             app.manage(utils::input_focus::PasteMode::new());
 
+            // 连续粘贴(框选模式)的 FIFO 队列:窗口"隐藏即销毁"会带走前端
+            // 状态,队列必须活在整个应用生命周期里
+            app.manage(services::continuous_paste::ContinuousPasteState::new());
+
             // 排除规则状态:轮询线程据此跳过密码管理器/敏感内容,不入库。
             // 必须早于 start_polling 载入配置,否则首轮轮询用空规则跑
             let exclusion_state = crate::services::exclusion_service::ExclusionState::new();
@@ -302,6 +306,12 @@ pub fn run() {
             commands::clipboard::pause_monitoring,
             commands::clipboard::get_image_base64,
             commands::clipboard::update_item_content,
+            commands::continuous_paste::start_continuous_paste,
+            commands::continuous_paste::start_continuous_paste_auto,
+            commands::continuous_paste::continuous_paste_next,
+            commands::continuous_paste::stop_continuous_paste_auto,
+            commands::continuous_paste::get_continuous_paste_status,
+            commands::continuous_paste::cancel_continuous_paste,
             commands::settings::save_settings,
             commands::settings::load_settings,
             commands::settings::allow_excluded_item,

@@ -207,3 +207,38 @@ export function CopyIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** 图层堆叠:连续粘贴(框选模式)开关 */
+export function LayersIcon(props: IconProps) {
+  return (
+    <svg {...svgProps(props)}>
+      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+      <polyline points="2 17 12 22 22 17" />
+      <polyline points="2 12 12 17 22 12" />
+    </svg>
+  );
+}
+
+export function CheckIcon(props: IconProps) {
+  return (
+    <svg {...svgProps({ strokeWidth: 2.4, ...props })}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+export function PlayIcon(props: IconProps) {
+  return (
+    <svg {...svgProps({ fill: 'currentColor', stroke: 'none', ...props })}>
+      <polygon points="7 4.5 19.5 12 7 19.5 7 4.5" />
+    </svg>
+  );
+}
+
+export function StopIcon(props: IconProps) {
+  return (
+    <svg {...svgProps({ fill: 'currentColor', stroke: 'none', ...props })}>
+      <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" />
+    </svg>
+  );
+}

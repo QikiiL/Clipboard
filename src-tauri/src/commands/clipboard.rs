@@ -8,81 +8,23 @@ pub async fn activate_item(
     id: i64,
     force_paste: Option<bool>,
 ) -> Result<(), String> {
-    let monitor = app_handle.state::<crate::services::clipboard_monitor::ClipboardMonitor>();
-    let db = app_handle.state::<SqlitePool>();
-
-    let row = sqlx::query_as::<_, (String, i32, Option<String>)>(
-        "SELECT content, type, file_path FROM items WHERE id = ?",
-    )
-    .bind(id)
-    .fetch_optional(&*db)
-    .await
-    .map_err(|e| e.to_string())?;
-
-    let (content, item_type, file_path) = row.ok_or_else(|| "Item not found".to_string())?;
-
     // 粘贴还是仅复制:优先取前端的强制指定,否则按唤出窗口时检测到的输入状态
     let do_paste = force_paste.unwrap_or_else(|| {
         app_handle
             .state::<crate::utils::input_focus::PasteMode>()
             .get()
     });
-    let mode = if do_paste {
-        crate::services::paste_service::DeliverMode::Paste
-    } else {
-        crate::services::paste_service::DeliverMode::CopyOnly
-    };
 
-    // 先销毁窗口(隐藏即销毁,WebView2 进程树随之退出),
-    // 再主动把前台焦点还给唤出前的目标窗口并等待其就绪;
-    // 若不等待,模拟的 Ctrl+V 会在焦点切换完成前发出而落空
-    crate::utils::window_manager::destroy_main_window(&app_handle);
-    let target_hwnd = app_handle
-        .state::<crate::utils::input_focus::PasteMode>()
-        .target();
-    if target_hwnd != 0 {
-        let _ = tauri::async_runtime::spawn_blocking(move || {
-            crate::utils::input_focus::restore_target_focus(target_hwnd)
-        })
-        .await;
-    } else {
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
-    }
-
-    monitor.set_suppress(true).await;
-
-    let result = crate::services::paste_service::deliver_content(
-        app_handle.clone(),
-        &content,
-        item_type,
-        file_path.as_deref(),
-        mode,
+    // 窗口销毁/焦点归还/监听抑制/模拟按键/更新使用时间,全部在共享核心里
+    // (与连续粘贴同一条投递路径,行为不会分叉)
+    match crate::services::paste_service::deliver_item_by_id(
+        &app_handle, id, true, do_paste, 500,
     )
-    .await;
-
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-    monitor.set_suppress(false).await;
-
-    if result.is_ok() {
-        if let Err(e) = sqlx::query(
-            "UPDATE items SET last_used_at = datetime('now') WHERE id = ?",
-        )
-        .bind(id)
-        .execute(&*db)
-        .await
-        {
-            eprintln!("Failed to update copy count: {}", e);
-        }
-        if let Err(e) = app_handle.emit(
-            "clipboard-changed",
-            serde_json::json!({"action": "updated", "id": id}),
-        ) {
-            eprintln!("Failed to emit clipboard-changed event: {}", e);
-        }
+    .await?
+    {
+        crate::services::paste_service::Delivery::Delivered => Ok(()),
+        crate::services::paste_service::Delivery::Missing => Err("Item not found".to_string()),
     }
-
-    result
 }
 
 #[tauri::command]

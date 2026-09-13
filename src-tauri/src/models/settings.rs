@@ -21,6 +21,13 @@ pub struct AppSettings {
     pub max_item_count: i32,
     pub hotkey_modifier: String,
     pub hotkey_key: String,
+    // 连续粘贴的步进热键:每按一次从 FIFO 队列头出队一条并粘贴。
+    // 默认 Ctrl+V —— 热键仅在队列存续期间注册为全局热键,队列结束立即注销,
+    // 日常粘贴不受影响;开始连贴后按 Ctrl+V 即"粘贴下一条",与手动粘贴同键自然衔接
+    #[serde(default = "default_seq_paste_modifier")]
+    pub seq_paste_modifier: String,
+    #[serde(default = "default_seq_paste_key")]
+    pub seq_paste_key: String,
     pub paused: bool,
     // 兼容旧版 settings.json:后加的字段缺省时不应导致整个结构体反序列化失败
     #[serde(default)]
@@ -58,6 +65,14 @@ fn default_true() -> bool {
     true
 }
 
+fn default_seq_paste_modifier() -> String {
+    "Ctrl".to_string()
+}
+
+fn default_seq_paste_key() -> String {
+    "V".to_string()
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -66,6 +81,8 @@ impl Default for AppSettings {
             max_item_count: 500,
             hotkey_modifier: "Ctrl+Shift".to_string(),
             hotkey_key: "V".to_string(),
+            seq_paste_modifier: "Ctrl".to_string(),
+            seq_paste_key: "V".to_string(),
             paused: false,
             close_behavior: CloseBehavior::default(),
             win_v_integration: false,
@@ -86,6 +103,18 @@ impl Default for AppSettings {
     }
 }
 
+impl AppSettings {
+    /// 连续粘贴步进热键的一次性迁移:首个版本默认 Ctrl+Alt+V,随后默认改为
+    /// Ctrl+V(仅队列存续期间注册为全局热键,与手动粘贴同键更顺手)。
+    /// 已保存配置里「仍是旧默认值」的直接跟随新默认;用户自定义过的其他
+    /// 组合一律不动。由 settings_service::load_settings 在每次读取时调用。
+    pub fn migrate_legacy_seq_hotkey(&mut self) {
+        if self.seq_paste_modifier == "Ctrl+Alt" && self.seq_paste_key == "V" {
+            self.seq_paste_modifier = "Ctrl".to_string();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,6 +127,31 @@ mod tests {
         assert!(!settings.paused);
         assert_eq!(settings.close_behavior, CloseBehavior::Ask);
         assert!(!settings.win_v_integration);
+        assert_eq!(settings.seq_paste_modifier, "Ctrl");
+        assert_eq!(settings.seq_paste_key, "V");
+    }
+
+    #[test]
+    fn legacy_seq_hotkey_migrates_to_ctrl_v() {
+        // 仍是旧默认 Ctrl+Alt+V 的配置 → 跟随新默认 Ctrl+V
+        let mut legacy = AppSettings::default();
+        legacy.seq_paste_modifier = "Ctrl+Alt".to_string();
+        legacy.migrate_legacy_seq_hotkey();
+        assert_eq!(legacy.seq_paste_modifier, "Ctrl");
+        assert_eq!(legacy.seq_paste_key, "V");
+
+        // 用户自定义过的其他组合不受迁移影响
+        let mut custom = AppSettings::default();
+        custom.seq_paste_modifier = "Ctrl+Alt".to_string();
+        custom.seq_paste_key = "P".to_string();
+        custom.migrate_legacy_seq_hotkey();
+        assert_eq!(custom.seq_paste_modifier, "Ctrl+Alt");
+        assert_eq!(custom.seq_paste_key, "P");
+
+        // 已经是新默认的配置原样保留
+        let mut current = AppSettings::default();
+        current.migrate_legacy_seq_hotkey();
+        assert_eq!(current.seq_paste_modifier, "Ctrl");
     }
 
     #[test]

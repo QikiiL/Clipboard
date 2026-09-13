@@ -58,7 +58,7 @@ fn store_path() -> std::path::PathBuf {
 
 pub fn load_settings(app_handle: &tauri::AppHandle) -> AppSettings {
     let store = app_handle.store(store_path());
-    match store {
+    let mut settings = match store {
         Ok(store) => {
             if let Some(value) = store.get(STORE_KEY) {
                 serde_json::from_value(value.clone()).unwrap_or_default()
@@ -70,7 +70,10 @@ pub fn load_settings(app_handle: &tauri::AppHandle) -> AppSettings {
             eprintln!("Failed to load settings store: {}", e);
             AppSettings::default()
         }
-    }
+    };
+    // 旧默认热键值跟随新默认(见 AppSettings::migrate_legacy_seq_hotkey)
+    settings.migrate_legacy_seq_hotkey();
+    settings
 }
 
 pub fn save_settings(app_handle: &tauri::AppHandle, settings: &AppSettings) -> Result<(), String> {

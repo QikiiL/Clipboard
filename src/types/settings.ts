@@ -6,6 +6,9 @@ export interface AppSettings {
   max_item_count: number;
   hotkey_modifier: string;
   hotkey_key: string;
+  // 连续粘贴的步进热键(每按一次从 FIFO 队列头出队一条并粘贴)
+  seq_paste_modifier: string;
+  seq_paste_key: string;
   paused: boolean;
   close_behavior: CloseBehavior;
   win_v_integration: boolean;
@@ -25,6 +28,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   max_item_count: 500,
   hotkey_modifier: 'Ctrl+Shift',
   hotkey_key: 'V',
+  seq_paste_modifier: 'Ctrl',
+  seq_paste_key: 'V',
   paused: false,
   close_behavior: 'ask',
   win_v_integration: false,

@@ -1,4 +1,5 @@
 pub mod clipboard;
+pub mod continuous_paste;
 pub mod db_path;
 pub mod groups;
 pub mod settings;

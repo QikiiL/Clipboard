@@ -116,9 +116,10 @@ pub fn spawn(app_handle: tauri::AppHandle) {
         let mut seen: SeenSet = HashSet::new();
 
         // 先初始轮询播种已见集合,再订阅事件(顺序不能反):启动时通知中心里
-        // 已存在的旧 toast 会被记为已见,不会被误当新通知;反过来的话,
-        // 「订阅之后、播种之前」窗口期内的旧通知会触发唤醒并被重复处理
-        if let Err(e) = poll_once(&listener, &mut seen, &app_handle) {
+        // 已存在的旧 toast 记为已见但**不捕获**(capture=false)——否则每次
+        // 进程启动,还留在通知中心的旧验证码 toast 都会被重新提取、写剪贴板、
+        // 重复入库(与 sms-helper 播种逻辑同源,语义保持一致)
+        if let Err(e) = poll_once(&listener, &mut seen, &app_handle, false) {
             eprintln!("[sms-code] 初始轮询失败(由兜底轮询稍后重试): {}", e);
         }
 
@@ -245,7 +246,7 @@ pub fn spawn(app_handle: tauri::AppHandle) {
                 continue;
             }
 
-            match poll_once(&listener, &mut seen, &app_handle) {
+            match poll_once(&listener, &mut seen, &app_handle, true) {
                 Ok(_) => last_error = None,
                 Err(e) => {
                     eprintln!("[sms-code] 轮询失败(权限或系统服务): {}", e);
@@ -320,12 +321,15 @@ fn subscribe_event(
 }
 
 /// 一轮轮询。返回本轮新处理的验证码条数。
+/// `capture=false` 时只播种已见集合、不捕获(启动时把通知中心里已有的
+/// 旧 toast 标记为已见 —— 否则每次进程启动都会把旧验证码重复复制、入库)。
 /// 已见集合按 TeleLink 的方式修剪:通知从通知中心消失后,同 id 的
 /// 新通知(Windows 会复用小整数 id)不应被误判为已见
 fn poll_once(
     listener: &UserNotificationListener,
     seen: &mut SeenSet,
     app_handle: &tauri::AppHandle,
+    capture: bool,
 ) -> windows::core::Result<usize> {
     let notifications = listener
         .GetNotificationsAsync(NotificationKinds::Toast)?
@@ -353,10 +357,13 @@ fn poll_once(
         }
         seen.insert(key);
 
-        if let Some((sender, body)) = extract_toast_texts(&note) {
-            if let Some(code) = extract_code(&body) {
-                hits += 1;
-                handle_code(app_handle, &code, &sender);
+        // 播种轮(capture=false)只记已见:启动时已存在的旧 toast 一律不处理
+        if capture {
+            if let Some((sender, body)) = extract_toast_texts(&note) {
+                if let Some(code) = extract_code(&body) {
+                    hits += 1;
+                    handle_code(app_handle, &code, &sender);
+                }
             }
         }
     }

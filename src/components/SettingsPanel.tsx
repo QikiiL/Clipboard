@@ -47,7 +47,9 @@ function formatCaptureTime(unix: number): string {
 
 export function SettingsPanel({ isOpen, onClose }: Props) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
-  const [recording, setRecording] = useState(false);
+  // 正在录制哪一组热键:null = 未录制;hotkey = 唤出热键,seq_paste = 连续粘贴热键
+  type HotkeyField = 'hotkey' | 'seq_paste';
+  const [recording, setRecording] = useState<HotkeyField | null>(null);
   const [winVEnabled, setWinVEnabled] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
@@ -65,7 +67,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   const settingsRef = useRef<AppSettings>(DEFAULT_SETTINGS);
   // savedRef 持有最近一次已持久化的值,用于判断数字输入是否真的改了
   const savedRef = useRef<AppSettings>(DEFAULT_SETTINGS);
-  const recordingRef = useRef(false);
+  const recordingRef = useRef<HotkeyField | null>(null);
   const { theme, toggleTheme } = useTheme();
   const setPaused = useClipboardStore((s) => s.setPaused);
 
@@ -88,8 +90,8 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
         setPaused(s.paused);
         setWinVEnabled(s.win_v_integration ?? false);
       }).catch(console.error);
-      setRecording(false);
-      recordingRef.current = false;
+      setRecording(null);
+      recordingRef.current = null;
       setClearConfirmOpen(false);
       setClearDays(0);
       invoke<StorageInfo>('get_storage_info')
@@ -142,8 +144,8 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (recordingRef.current) {
-          setRecording(false);
-          recordingRef.current = false;
+          setRecording(null);
+          recordingRef.current = null;
         } else if (clearConfirmOpen) {
           setClearConfirmOpen(false);
         } else {
@@ -197,7 +199,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
     }
   }, [applySettings, saveNow]);
 
-  // Hotkey recording handler
+  // Hotkey recording handler(唤出热键与连续粘贴热键共用录制逻辑)
   const handleRecordKeyDown = useCallback((e: KeyboardEvent) => {
     if (!recordingRef.current) return;
     e.preventDefault();
@@ -218,11 +220,28 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
 
     const modifier = modifiers.join('+');
     const mainKey = e.key.toUpperCase();
-    const next = { ...settingsRef.current, hotkey_modifier: modifier, hotkey_key: mainKey };
-    setRecording(false);
-    recordingRef.current = false;
-    void saveHotkey(next);
-  }, [saveHotkey]);
+    const isSeq = recordingRef.current === 'seq_paste';
+
+    // 连续粘贴热键与唤出热键相同会导致两个 handler 抢同一个全局组合键
+    if (isSeq && modifier === settingsRef.current.hotkey_modifier && mainKey === settingsRef.current.hotkey_key) {
+      alert('连续粘贴热键不能与唤出窗口的全局热键相同');
+      setRecording(null);
+      recordingRef.current = null;
+      return;
+    }
+
+    const next = isSeq
+      ? { ...settingsRef.current, seq_paste_modifier: modifier, seq_paste_key: mainKey }
+      : { ...settingsRef.current, hotkey_modifier: modifier, hotkey_key: mainKey };
+    setRecording(null);
+    recordingRef.current = null;
+    // 唤出热键需立即注册验证;连续粘贴热键只在队列开始时才注册,直接保存即可
+    if (isSeq) {
+      void saveNow(next);
+    } else {
+      void saveHotkey(next);
+    }
+  }, [saveHotkey, saveNow]);
 
   useEffect(() => {
     if (!recording) return;
@@ -231,8 +250,13 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   }, [recording, handleRecordKeyDown]);
 
   const startRecording = () => {
-    setRecording(true);
-    recordingRef.current = true;
+    setRecording('hotkey');
+    recordingRef.current = 'hotkey';
+  };
+
+  const startRecordingSeq = () => {
+    setRecording('seq_paste');
+    recordingRef.current = 'seq_paste';
   };
 
   const resetHotkey = () => {
@@ -240,6 +264,14 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
       ...settingsRef.current,
       hotkey_modifier: DEFAULT_SETTINGS.hotkey_modifier,
       hotkey_key: DEFAULT_SETTINGS.hotkey_key,
+    });
+  };
+
+  const resetSeqHotkey = () => {
+    void saveNow({
+      ...settingsRef.current,
+      seq_paste_modifier: DEFAULT_SETTINGS.seq_paste_modifier,
+      seq_paste_key: DEFAULT_SETTINGS.seq_paste_key,
     });
   };
 
@@ -348,9 +380,14 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
     }
   };
 
-  const displayShortcut = recording
-    ? '请按下快捷键…'
-    : `${settings.hotkey_modifier}+${settings.hotkey_key}`;
+  const displayShortcut =
+    recording === 'hotkey'
+      ? '请按下快捷键…'
+      : `${settings.hotkey_modifier}+${settings.hotkey_key}`;
+  const displaySeqShortcut =
+    recording === 'seq_paste'
+      ? '请按下快捷键…'
+      : `${settings.seq_paste_modifier}+${settings.seq_paste_key}`;
 
   // 渲染时只解析一次(此前在 JSX 里调用了两遍)
   const updateNoteLines = updateResult ? parseUpdateNotes(updateResult.notes) : [];
@@ -427,7 +464,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                 className={`flex-1 h-[30px] rounded-[9px] text-center font-mono text-xs select-none transition-[background-color,border-color,color] duration-150 ${
                   winVEnabled
                     ? 'border border-hairline bg-app text-faint cursor-not-allowed'
-                    : recording
+                    : recording === 'hotkey'
                       ? 'border border-accent bg-accent-soft text-accent animate-pulse cursor-pointer'
                       : 'border border-hairline bg-app text-muted hover:border-accent cursor-pointer'
                 } flex items-center justify-center`}
@@ -447,7 +484,37 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
               </button>
             </div>
             <p className="text-[11px] text-faint mt-1">
-              {recording ? '按下想要的快捷键组合…' : '点击上方区域录制新快捷键,录制完成即生效'}
+              {recording === 'hotkey' ? '按下想要的快捷键组合…' : '点击上方区域录制新快捷键,录制完成即生效'}
+            </p>
+          </div>
+
+          {/* 连续粘贴热键 */}
+          <div>
+            <label className="text-[12.5px] font-medium">连续粘贴热键</label>
+            <p className="text-[11px] text-faint mb-1">
+              连续粘贴时,每按一次粘贴队列中的下一条(仅队列进行期间占用)
+            </p>
+            <div className="flex gap-2 items-center">
+              <div
+                onClick={startRecordingSeq}
+                className={`flex-1 h-[30px] rounded-[9px] text-center font-mono text-xs select-none transition-[background-color,border-color,color] duration-150 flex items-center justify-center ${
+                  recording === 'seq_paste'
+                    ? 'border border-accent bg-accent-soft text-accent animate-pulse cursor-pointer'
+                    : 'border border-hairline bg-app text-muted hover:border-accent cursor-pointer'
+                }`}
+              >
+                {displaySeqShortcut}
+              </div>
+              <button
+                onClick={resetSeqHotkey}
+                title="恢复默认快捷键"
+                className="h-[30px] px-3 text-[11px] rounded-[9px] border border-hairline bg-app text-muted hover:bg-hairline transition-colors duration-150"
+              >
+                重置
+              </button>
+            </div>
+            <p className="text-[11px] text-faint mt-1">
+              {recording === 'seq_paste' ? '按下想要的快捷键组合…' : '不能与唤出窗口的全局热键相同'}
             </p>
           </div>
 

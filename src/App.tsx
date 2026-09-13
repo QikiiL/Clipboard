@@ -6,9 +6,11 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { SearchBar } from './components/SearchBar';
 import { GroupTabs } from './components/GroupTabs';
 import { ClipboardList } from './components/ClipboardList';
+import { ContinuousPasteBar } from './components/ContinuousPasteBar';
 import { StatusBar } from './components/StatusBar';
 import { SettingsPanel } from './components/SettingsPanel';
 import { CloseConfirmDialog } from './components/CloseConfirmDialog';
+import { useContinuousPasteStore } from './stores/continuousPasteStore';
 import {
   PinIcon,
   SettingsIcon,
@@ -16,6 +18,7 @@ import {
   MaximizeIcon,
   RestoreIcon,
   XIcon,
+  LayersIcon,
 } from './components/icons';
 import { useClipboardListener } from './hooks/useClipboardListener';
 import { useDatabase } from './hooks/useDatabase';
@@ -27,8 +30,15 @@ function AppContent() {
   const [pinned, setPinned] = useState(true);
   const [maximized, setMaximized] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const cpMode = useContinuousPasteStore((s) => s.mode);
   const { loadItems } = useDatabase();
   useClipboardListener(loadItems);
+
+  // 窗口是"隐藏即销毁、唤出即重建":重建后从后端同步连续粘贴队列状态。
+  // 队列活在整个应用生命周期里,窗口销毁期间按过热键的进度都能接上
+  useEffect(() => {
+    useContinuousPasteStore.getState().refreshStatus();
+  }, []);
 
   // 启动时静默检查更新;同一新版本只提醒一次(记录在 localStorage,
   // 窗口销毁重建后不会重复弹窗),用户可在设置里随时手动检查。
@@ -146,6 +156,21 @@ function AppContent() {
               <PinIcon size={16} />
             </button>
             <button
+              onClick={() => useContinuousPasteStore.getState().toggleMode()}
+              className={`flex items-center justify-center w-[30px] h-[30px] rounded-lg transition-colors @max-narrow:w-[26px] @max-narrow:h-[26px] ${
+                cpMode
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-muted hover:bg-hairline hover:text-faint'
+              }`}
+              title={
+                cpMode
+                  ? '退出连续粘贴模式'
+                  : '连续粘贴:框选多条内容,按顺序逐条粘贴到目标窗口'
+              }
+            >
+              <LayersIcon size={16} />
+            </button>
+            <button
               onClick={() => setSettingsOpen(true)}
               className={iconBtn}
               title="设置"
@@ -168,6 +193,7 @@ function AppContent() {
       </header>
       <SearchBar />
       <GroupTabs />
+      <ContinuousPasteBar />
       <ClipboardList />
       <StatusBar />
       <SettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />

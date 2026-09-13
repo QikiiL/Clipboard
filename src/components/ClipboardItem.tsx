@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useCallback, useRef } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { useClipboardStore } from '../stores/clipboardStore';
+import { useContinuousPasteStore } from '../stores/continuousPasteStore';
 import { dbTimeToDate, formatBytes } from '../lib/format';
 import type { ClipboardItem as ClipboardItemType, ClipboardType } from '../types/clipboard';
 import { ClipboardType as CT } from '../types/clipboard';
@@ -15,6 +16,7 @@ import {
   FolderFillIcon,
   TrashIcon,
   EyeIcon,
+  CheckIcon,
 } from './icons';
 
 // 图片缩略图经 asset 协议按需加载(不经 IPC/base64);
@@ -113,6 +115,15 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
   >(null);
   const tipCloseTimer = useRef<number | undefined>(undefined);
   const groups = useClipboardStore((s) => s.groups);
+  // 连续粘贴(框选模式):选中态用明显的包围框描边 + 粘贴顺序徽标,
+  // 已粘贴条目整体变淡并打勾。store 为空映射/空集合时全部为默认值,
+  // 普通模式下零开销
+  const boxMode = useContinuousPasteStore((s) => s.mode);
+  const boxSelected = useContinuousPasteStore(
+    (s) => s.mode && (s.selectedIds.has(item.id) || s.bandPreview.has(item.id))
+  );
+  const boxOrder = useContinuousPasteStore((s) => s.orderById.get(item.id) ?? null);
+  const boxUsed = useContinuousPasteStore((s) => s.pastedIds.has(item.id));
 
   useEffect(() => () => window.clearTimeout(tipCloseTimer.current), []);
 
@@ -277,8 +288,22 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
 
   return (
     <div
-      className="group relative flex items-center gap-2.5 min-h-[52px] p-[10px] rounded-[10px] cursor-pointer transition-[background-color,box-shadow] duration-150 hover:bg-surface hover:shadow-lift @max-narrow:gap-2 @max-narrow:min-h-[46px] @max-narrow:p-2 @min-wide:gap-3 @min-wide:min-h-[60px] @min-wide:p-3"
-      onClick={() => onActivate(item)}
+      className={`group relative flex items-center gap-2.5 min-h-[52px] p-[10px] rounded-[10px] cursor-pointer transition-[background-color,box-shadow] duration-150 hover:bg-surface hover:shadow-lift @max-narrow:gap-2 @max-narrow:min-h-[46px] @max-narrow:p-2 @min-wide:gap-3 @min-wide:min-h-[60px] @min-wide:p-3 ${
+        boxSelected ? 'ring-2 ring-accent bg-accent-soft/50 shadow-lift' : ''
+      } ${boxMode && boxUsed ? 'opacity-50' : ''}`}
+      onClick={(e) => {
+        if (boxMode) {
+          // 框选模式:单击只切换选中(Shift+点击区间补选),绝不触发系统粘贴;
+          // 拖拽框选结束的那次 click 已被 ClipboardList 的捕获阶段拦截
+          if (e.shiftKey) {
+            useContinuousPasteStore.getState().selectRangeTo(item.id);
+          } else {
+            useContinuousPasteStore.getState().toggleSelect(item.id);
+          }
+          return;
+        }
+        onActivate(item);
+      }}
     >
       {!(isImage && imageSrc && !imageFailed) && (
         <div className="flex-shrink-0 mt-px text-faint">
@@ -315,7 +340,8 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
           <span className="text-accent mr-2"><FolderFillIcon size={13} /></span>
         )}
         <span className="text-[11px] text-faint tabular-nums @max-narrow:hidden @min-wide:text-[12px]">{formatTime(item.last_used_at)}</span>
-        <div className="flex items-center pl-2 w-0 overflow-hidden group-hover:w-[118px] group-focus-within:w-[118px] transition-[width] duration-150 ease-out @max-narrow:pl-1 @max-narrow:group-hover:w-[98px] @max-narrow:group-focus-within:w-[98px] @min-wide:group-hover:w-[130px] @min-wide:group-focus-within:w-[130px]">
+        {!boxMode && (
+          <div className="flex items-center pl-2 w-0 overflow-hidden group-hover:w-[118px] group-focus-within:w-[118px] transition-[width] duration-150 ease-out @max-narrow:pl-1 @max-narrow:group-hover:w-[98px] @max-narrow:group-focus-within:w-[98px] @min-wide:group-hover:w-[130px] @min-wide:group-focus-within:w-[130px]">
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150">
             {!isImage && (
               <button
@@ -355,6 +381,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
             </button>
           </div>
         </div>
+        )}
       </div>
       {contentTip && (
         <div
@@ -413,6 +440,18 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
             )}
           </div>
         </>
+      )}
+      {boxMode && boxSelected && !boxUsed && boxOrder !== null && (
+        // 粘贴顺序徽标:按界面从上到下编号,最上面的是第 1 条(FIFO 队首)
+        <span className="absolute -top-1.5 -right-1.5 z-20 flex items-center justify-center h-[18px] min-w-[18px] px-1 rounded-full bg-accent text-on-accent text-[10px] font-bold leading-none tabular-nums shadow-lift pointer-events-none">
+          {boxOrder}
+        </span>
+      )}
+      {boxMode && boxUsed && (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-ok text-on-accent text-[10px] font-semibold pointer-events-none">
+          <CheckIcon size={10} />
+          已粘贴
+        </span>
       )}
     </div>
   );

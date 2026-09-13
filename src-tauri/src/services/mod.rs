@@ -1,4 +1,5 @@
 pub mod clipboard_monitor;
+pub mod continuous_paste;
 pub mod exclusion_service;
 pub mod image_cleanup;
 pub mod identity;

@@ -96,9 +96,9 @@ pub fn create_main_window(app: &AppHandle, show_when_ready: bool) -> tauri::Resu
 
     let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title("剪贴板管理器 (Clipboard)")
-        // 初始尺寸仅作占位(基准 370×455 逻辑):随后 apply_initial_geometry 会按
+        // 初始尺寸仅作占位(基准 420×520 逻辑):随后 apply_initial_geometry 会按
         // 目标显示器与缩放重算(老用户跨 DPI 还原,新用户按屏幕相对 1080p 缩放)
-        .inner_size(370.0, 455.0)
+        .inner_size(420.0, 520.0)
         // 最小尺寸(逻辑单位):防用户拖到不可用;与 window_sizing 的钳制下限一致
         .min_inner_size(crate::utils::window_sizing::MIN_W, crate::utils::window_sizing::MIN_H)
         .resizable(true)
@@ -162,10 +162,13 @@ fn window_state_path() -> std::path::PathBuf {
 }
 
 pub fn load_window_state() -> WindowState {
-    std::fs::read_to_string(window_state_path())
+    let mut state = std::fs::read_to_string(window_state_path())
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    // 上一版默认尺寸跟随新默认(见 window_sizing::migrate_legacy_size)
+    crate::utils::window_sizing::migrate_legacy_size(&mut state);
+    state
 }
 
 fn save_window_state(s: &WindowState) {
