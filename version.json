@@ -1,7 +1,7 @@
 {
-  "version": "0.4.0",
-  "notes": "全新「连续粘贴」功能,建议所有用户升级\n- 新增连续粘贴模式:框选多条记录,按顺序逐条粘贴到任意输入框\n- 支持拖拽框选与 Shift 区间补选,条目带粘贴序号,已粘贴自动标记\n- 触发热键默认 Ctrl+V,仅队列进行期间生效,结束立即恢复,可在设置中修改\n- 快速连按不丢步:忙碌期间的按键自动排队逐条消化\n- 支持「自动连贴」:按固定间隔自动逐条粘贴\n- 修复启动时重复读取旧短信验证码并重复记录的问题\n- 默认窗口尺寸调大,旧默认尺寸自动迁移",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v0.4.0",
+  "version": "0.4.1",
+  "notes": "修复与改进版本\n- 修复启动时仍可能把通知中心里的旧短信验证码重复记录一次的问题\n- 新增后台更新监视:每 2 小时主动检查新版本,面板可见直接弹窗、不可见发系统通知\n- 唤出面板时的更新检查节流从 4 小时缩短到 30 分钟",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v0.4.1",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }
