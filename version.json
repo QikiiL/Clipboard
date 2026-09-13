@@ -1,7 +1,7 @@
 {
-  "version": "0.4.1",
-  "notes": "修复与改进版本\n- 修复启动时仍可能把通知中心里的旧短信验证码重复记录一次的问题\n- 新增后台更新监视:每 2 小时主动检查新版本,面板可见直接弹窗、不可见发系统通知\n- 唤出面板时的更新检查节流从 4 小时缩短到 30 分钟",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v0.4.1",
+  "version": "0.4.2",
+  "notes": "修复版本\n- 修复每次启动软件都会把剪贴板里残留的旧内容重新记录一遍、时间显示刚刚的问题\n- 删除该记录后重启软件也不会再次生成\n- 启动后新复制的内容照常实时记录",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v0.4.2",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }
