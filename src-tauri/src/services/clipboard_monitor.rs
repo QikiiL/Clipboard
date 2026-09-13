@@ -31,6 +31,13 @@ fn read_clipboard_dib_fallback() -> Option<(Vec<u8>, usize, usize)> {
     let header_size =
         u32::from_le_bytes([dib_data[0], dib_data[1], dib_data[2], dib_data[3]]) as usize;
 
+    // 只处理 BITMAPINFOHEADER 及其扩展(≥40 字节,前 40 字节布局一致):
+    // BITMAPCOREHEADER(12)等老格式的 biBitCount/biClrUsed 偏移不同,
+    // 按错误偏移解析只会得到垃圾数据,宁可放弃这一帧
+    if header_size < 40 {
+        return None;
+    }
+
     // Read biBitCount (offset 14) and biClrUsed (offset 32) for color table size
     let bit_count = u16::from_le_bytes([dib_data[14], dib_data[15]]);
     let clr_used =
@@ -60,14 +67,14 @@ fn read_clipboard_dib_fallback() -> Option<(Vec<u8>, usize, usize)> {
     Some((rgba.into_raw(), width, height))
 }
 
-/// Check if a string looks like a file path (Windows drive letter, Unix path, or UNC path).
+/// Check if a string looks like a Windows file path (drive letter or UNC path).
+/// 不再把 `/` 前缀的文本判为文件:那是 Unix 语法,在 Windows 上不是有效路径,
+/// 误判会让粘贴走 CF_HDROP 写入无效文件列表而失败,展示图标也是误导。
 fn is_file_path(s: &str) -> bool {
     // Windows drive letter (C:\...)
     (s.len() >= 3
         && s.as_bytes()[1] == b':'
         && (s.as_bytes()[2] == b'\\' || s.as_bytes()[2] == b'/'))
-    // Unix path
-    || s.starts_with('/')
     // UNC path (\\server\share)
     || (s.starts_with("\\\\") && s.len() > 2)
 }
@@ -107,20 +114,26 @@ fn read_clipboard_content() -> Option<CapturedContent> {
     // The clipboard_win guard must be dropped before arboard calls below,
     // as both open the clipboard exclusively.
     {
-        let _clip = clipboard_win::Clipboard::new().ok()?;
+        // 打不开剪贴板(被其他进程占用)时本轮什么都读不到,下一轮再试;
+        // 多试几次以减少偶发冲突导致的整轮空转
+        let _clip = clipboard_win::Clipboard::new_attempts(10).ok()?;
         const CF_HDROP: u32 = 15;
         if clipboard_win::is_format_avail(CF_HDROP) {
-            let files: Vec<String> = clipboard_win::get(clipboard_win::formats::FileList).ok()?;
-            if !files.is_empty() {
-                return Some(CapturedContent {
-                    content: files.join("\n"),
-                    item_type: ClipboardType::File as i32,
-                    image_hash: None,
-                    image_bytes: None,
-                    width: 0,
-                    height: 0,
-                    source_process,
-                });
+            // HDROP 读取失败(或列表为空)不能中断本轮:复制方可能处于延迟渲染
+            // 等瞬态,直接返回 None 会让图片/文本捕获被一条坏 HDROP 卡住
+            let files = clipboard_win::get::<Vec<String>, _>(clipboard_win::formats::FileList);
+            if let Ok(files) = files {
+                if !files.is_empty() {
+                    return Some(CapturedContent {
+                        content: files.join("\n"),
+                        item_type: ClipboardType::File as i32,
+                        image_hash: None,
+                        image_bytes: None,
+                        width: 0,
+                        height: 0,
+                        source_process,
+                    });
+                }
             }
         }
     }
@@ -389,6 +402,13 @@ impl ClipboardMonitor {
                 {
                     let mut last = monitor.last_hash.lock().await;
                     *last = hash.clone();
+                }
+
+                // 图片落盘失败(磁盘满/尺寸与字节数不匹配)时不入库:留下一条
+                // 无图的 "[图片]" 死条目既显示不出、粘贴也会被路径守卫拒绝。
+                // last_hash 已在上面更新,不会对同一帧图片反复重试
+                if item_type == ClipboardType::Image as i32 && file_path.is_none() {
+                    continue;
                 }
 
                 // Check for existing item

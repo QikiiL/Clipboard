@@ -31,8 +31,17 @@ function AppContent() {
   useClipboardListener(loadItems);
 
   // 启动时静默检查更新;同一新版本只提醒一次(记录在 localStorage,
-  // 窗口销毁重建后不会重复弹窗),用户可在设置里随时手动检查
+  // 窗口销毁重建后不会重复弹窗),用户可在设置里随时手动检查。
+  // 加 4 小时节流:窗口是"隐藏即销毁、唤出即重建",每次唤出都会重挂本组件,
+  // 不限流的话每次按热键唤出都会发起一轮网络检查(代理/直连/镜像共三次尝试)
   useEffect(() => {
+    const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+    const last = Number(localStorage.getItem('clipboard-update-checked-at') ?? 0);
+    if (Number.isFinite(last) && last > 0 && Date.now() - last < CHECK_INTERVAL_MS) {
+      return;
+    }
+    // 请求前先写时间戳:失败(无网络)同样节流,避免唤出窗口每次都白等超时
+    localStorage.setItem('clipboard-update-checked-at', String(Date.now()));
     invoke<UpdateInfo>('check_update')
       .then((info) => {
         if (

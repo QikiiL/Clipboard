@@ -114,7 +114,8 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   }, [isOpen, refreshSmsStatus]);
 
   const handleToggleSmsCode = async () => {
-    const next = !settings.sms_code_enabled;
+    // 与其他开关一致读 settingsRef:settings state 可能滞后于最近一次保存
+    const next = !settingsRef.current.sms_code_enabled;
     await saveNow({ ...settingsRef.current, sms_code_enabled: next });
     if (next) {
       // 打开时请求一次权限:非打包应用不弹系统对话框,这个调用的作用
@@ -350,6 +351,9 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   const displayShortcut = recording
     ? '请按下快捷键…'
     : `${settings.hotkey_modifier}+${settings.hotkey_key}`;
+
+  // 渲染时只解析一次(此前在 JSX 里调用了两遍)
+  const updateNoteLines = updateResult ? parseUpdateNotes(updateResult.notes) : [];
 
   if (!isOpen) return null;
 
@@ -785,9 +789,9 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                 <p className="text-[11px] text-faint">
                   当前 v{updateResult.current} → 最新 <span className="text-accent">v{updateResult.latest}</span>
                 </p>
-                {parseUpdateNotes(updateResult.notes).length > 0 && (
+                {updateNoteLines.length > 0 && (
                   <ul className="mt-1.5 space-y-1">
-                    {parseUpdateNotes(updateResult.notes).map((line, i) => (
+                    {updateNoteLines.map((line, i) => (
                       <li key={i} className="flex gap-1.5 text-[11px] leading-relaxed text-faint">
                         <span className="text-accent shrink-0 select-none">•</span>
                         <span className="min-w-0 break-words">{line}</span>

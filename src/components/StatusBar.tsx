@@ -4,13 +4,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { useClipboardStore } from '../stores/clipboardStore';
 import { queryItems } from '../lib/db';
+import { formatBytes } from '../lib/format';
 import { ArrowUpIcon } from './icons';
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 // 排除原因 → 状态栏文案。用「未记录」而不是「已排除」:后者是内部术语,
 // 普通用户看不懂"排除"意味着什么,「未记录」直接说明结果
@@ -158,7 +153,7 @@ export function StatusBar() {
         <span className="whitespace-nowrap">共 {totalCount} 条</span>
         <span className="whitespace-nowrap">{favoriteCount} 收藏</span>
         {dbSize !== null && (
-          <span className="hidden @min-wide:inline whitespace-nowrap">{formatSize(dbSize)}</span>
+          <span className="hidden @min-wide:inline whitespace-nowrap">{formatBytes(dbSize)}</span>
         )}
         {appVersion && (
           // flex-shrink-0 保证版本号永远不被裁剪;不写 hidden md:inline

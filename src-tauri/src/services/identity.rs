@@ -22,6 +22,10 @@
 //! 最多重试一次注册。注意:注册本身是系统部署操作,耗时不由本模块控制
 //! (实测首次注册遇到不受信任证书时,系统做证书链校验可能耗时数分钟),
 //! 只保证失败一律返回 Err、由调用方降级。
+//!
+//! ⚠️ 本模块被 examples/sms-capture-helper.rs 通过 `#[path]` 引入独立编译,
+//! 因此**不得**引用 `crate::` 下的任何项(含 lib.rs 的 exe_dir),依赖只限
+//! windows/std —— 看似重复的本地辅助函数是有意保留的。
 
 use std::path::PathBuf;
 use std::time::Duration;

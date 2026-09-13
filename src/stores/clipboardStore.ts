@@ -22,6 +22,9 @@ interface ClipboardStore {
   setPaused: (paused: boolean) => void;
   setMaxItems: (maxItems: number) => void;
   incrementRequestId: () => number;
+  /** 一次 set 同时更新选中分组与收藏过滤:useClipboardListener 的订阅按
+   * 变更触发重查,分开 set 会连发两次查询(如"收藏 → 某分组") */
+  setView: (view: { selectedGroup: ClipboardGroup | null; showFavorites: boolean }) => void;
 }
 
 export const useClipboardStore = create<ClipboardStore>((set, get) => ({
@@ -43,6 +46,7 @@ export const useClipboardStore = create<ClipboardStore>((set, get) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setPaused: (isPaused) => set({ isPaused }),
   setMaxItems: (maxItems) => set({ maxItems }),
+  setView: (view) => set(view),
   incrementRequestId: () => {
     const id = get().requestId + 1;
     set({ requestId: id });

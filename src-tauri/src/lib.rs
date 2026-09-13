@@ -224,12 +224,7 @@ pub fn run() {
             // the default Ctrl+Shift+V.
             let register_fn = |shortcut: &Shortcut| -> Result<(), String> {
                 app.global_shortcut()
-                    .on_shortcut(shortcut.clone(), |app, _shortcut, event| {
-                        use tauri_plugin_global_shortcut::ShortcutState;
-                        if event.state == ShortcutState::Pressed {
-                            utils::hotkey::toggle_window(app);
-                        }
-                    })
+                    .on_shortcut(shortcut.clone(), commands::window::toggle_on_press)
                     .map_err(|e| e.to_string())
             };
             let mut last_err = String::new();

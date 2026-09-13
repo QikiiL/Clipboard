@@ -13,12 +13,11 @@ pub fn toggle_window(app: &tauri::AppHandle) {
         if is_visible && !is_minimized {
             crate::utils::window_manager::destroy_main_window(app);
         } else {
+            // 统一走 show_or_create:自带 unminimize + ensure_on_screen +
+            // 聚焦。此前直接 show/set_focus,窗口坐标已不在任何显示器上时
+            // (如唤出前拔了显示器)会"唤出了却看不见"
             show_with_paste_target(app);
-            if is_minimized {
-                let _ = window.unminimize();
-            }
-            let _ = window.show();
-            let _ = window.set_focus();
+            crate::utils::window_manager::show_or_create(app);
         }
     } else {
         // 窗口已被销毁:重建需要约 1s,期间 CREATING 标志防重入

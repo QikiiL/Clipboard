@@ -1,13 +1,23 @@
 use crate::models::settings::CloseBehavior;
 use std::sync::Mutex;
 use tauri::Manager;
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{
+    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
+};
 use winreg::enums::*;
 use winreg::RegKey;
 
 /// Tracks the currently registered custom shortcut so it can be unregistered
 /// when the user changes to a different hotkey.
 pub struct LastHotkey(pub Mutex<Option<Shortcut>>);
+
+/// 快捷键按下回调(热键 toggle 面板)。register_hotkey / Win+V 接管 /
+/// lib.rs 启动注册共用同一家实现,原先五处各写一份闭包,行为一致但难以同步。
+pub fn toggle_on_press(app: &tauri::AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
+    if event.state == ShortcutState::Pressed {
+        crate::utils::hotkey::toggle_window(app);
+    }
+}
 
 #[tauri::command]
 pub fn show_window(app_handle: tauri::AppHandle) -> Result<(), String> {
@@ -65,23 +75,42 @@ pub fn register_hotkey(
     let last_hotkey = app_handle.state::<LastHotkey>();
     let mut last = last_hotkey.0.lock().unwrap_or_else(|e| e.into_inner());
 
+    // 先构建新快捷键再动旧热键:构建失败(不支持的键名)时旧热键原样保留
+    let shortcut = crate::utils::hotkey::build_shortcut(&modifier, &key)
+        .ok_or_else(|| format!("Unsupported key: {}", key))?;
+
+    if let Some(prev) = last.as_ref() {
+        if *prev == shortcut {
+            return Ok(()); // 与当前热键相同,无需变更
+        }
+    }
+
     // Unregister the old shortcut FIRST, before registering the new one.
     // This is necessary because on_shortcut() fails if the shortcut is already registered
     // (e.g. by the plugin-level handler that runs at startup).
-    if let Some(prev) = last.take() {
-        let _ = app_handle.global_shortcut().unregister(prev);
+    let prev = last.take();
+    if let Some(prev) = &prev {
+        let _ = app_handle.global_shortcut().unregister(prev.clone());
     }
 
-    let shortcut = crate::utils::hotkey::build_shortcut(&modifier, &key)
-        .ok_or_else(|| format!("Unsupported key: {}", key))?;
-    app_handle
+    if let Err(e) = app_handle
         .global_shortcut()
-        .on_shortcut(shortcut.clone(), move |app_handle, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                crate::utils::hotkey::toggle_window(app_handle);
+        .on_shortcut(shortcut.clone(), toggle_on_press)
+    {
+        // 注册失败(如被其他程序占用):必须恢复旧热键,否则用户从此
+        // 没有任何可用的唤出方式,只能重启应用
+        eprintln!("Failed to register hotkey {:?}: {}. Restoring previous.", shortcut, e);
+        if let Some(prev) = &prev {
+            if app_handle
+                .global_shortcut()
+                .on_shortcut(prev.clone(), toggle_on_press)
+                .is_ok()
+            {
+                *last = Some(prev.clone());
             }
-        })
-        .map_err(|e| e.to_string())?;
+        }
+        return Err(e.to_string());
+    }
 
     *last = Some(shortcut);
 
@@ -163,11 +192,8 @@ pub async fn enable_win_v_integration(app_handle: tauri::AppHandle) -> Result<()
         }
         match app_handle
             .global_shortcut()
-            .on_shortcut(winv.clone(), move |app_handle, _shortcut, event| {
-                if event.state == ShortcutState::Pressed {
-                    crate::utils::hotkey::toggle_window(app_handle);
-                }
-            }) {
+            .on_shortcut(winv.clone(), toggle_on_press)
+        {
             Ok(()) => {
                 registered = true;
                 break;
@@ -185,11 +211,7 @@ pub async fn enable_win_v_integration(app_handle: tauri::AppHandle) -> Result<()
         let fallback = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyV);
         let _ = app_handle
             .global_shortcut()
-            .on_shortcut(fallback.clone(), move |app_handle, _shortcut, event| {
-                if event.state == ShortcutState::Pressed {
-                    crate::utils::hotkey::toggle_window(app_handle);
-                }
-            });
+            .on_shortcut(fallback.clone(), toggle_on_press);
         fallback
     };
 
@@ -240,22 +262,15 @@ pub fn disable_win_v_integration(app_handle: tauri::AppHandle) -> Result<(), Str
     // 自定义热键注册失败时退回默认 Ctrl+Shift+V,保证始终有热键可用
     let final_shortcut = match app_handle
         .global_shortcut()
-        .on_shortcut(shortcut.clone(), move |app_handle, _shortcut, event| {
-            if event.state == ShortcutState::Pressed {
-                crate::utils::hotkey::toggle_window(app_handle);
-            }
-        }) {
+        .on_shortcut(shortcut.clone(), toggle_on_press)
+    {
         Ok(()) => shortcut,
         Err(e) => {
             eprintln!("Failed to register custom hotkey after Win+V off: {}. Falling back to Ctrl+Shift+V.", e);
             let fallback = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyV);
             let _ = app_handle
                 .global_shortcut()
-                .on_shortcut(fallback.clone(), move |app_handle, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        crate::utils::hotkey::toggle_window(app_handle);
-                    }
-                });
+                .on_shortcut(fallback.clone(), toggle_on_press);
             fallback
         }
     };

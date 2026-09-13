@@ -187,23 +187,12 @@ pub async fn get_image_base64(
     app_handle: tauri::AppHandle,
     file_path: String,
 ) -> Result<String, String> {
-    // 1. SECURITY: Resolve the images directory and validate path is inside it
-    let images_dir = crate::services::storage_service::images_dir(&app_handle);
-
-    // Ensure images dir exists before canonicalizing
-    let _ = std::fs::create_dir_all(&images_dir);
-
-    let canonical_images = std::fs::canonicalize(&images_dir)
-        .map_err(|e| format!("Failed to resolve images directory: {}", e))?;
-
-    let canonical = std::fs::canonicalize(&file_path).map_err(|e| match e.kind() {
-        std::io::ErrorKind::NotFound => "Image file not found".to_string(),
-        _ => format!("Failed to resolve file path: {}", e),
-    })?;
-
-    if !canonical.starts_with(&canonical_images) {
-        return Err("Access denied: path is outside the images directory".to_string());
-    }
+    // 1. SECURITY: 图片路径必须落在应用 images 目录内。
+    // 统一走 storage_service::resolve_image_path 守卫(读取/删除/粘贴三条
+    // 路径同源),此前这里内联复制了一份同等逻辑,守卫一旦改动容易漏改
+    let canonical =
+        crate::services::storage_service::resolve_image_path(&app_handle, &file_path)
+            .ok_or_else(|| "图片不存在或不在应用图片目录内,已拒绝读取".to_string())?;
 
     // 2. File size limit: reject files over 5MB
     const MAX_SIZE: u64 = 5 * 1024 * 1024;

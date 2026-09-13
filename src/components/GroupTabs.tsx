@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useClipboardStore } from '../stores/clipboardStore';
-import { useDatabase } from '../hooks/useDatabase';
 import type { ClipboardGroup } from '../types/group';
 import { PlusIcon, StarIcon } from './icons';
 import { PromptDialog, ConfirmDialog } from './Dialogs';
@@ -15,44 +14,38 @@ export function GroupTabs() {
   const groups = useClipboardStore((s) => s.groups);
   const selectedGroup = useClipboardStore((s) => s.selectedGroup);
   const setSelectedGroup = useClipboardStore((s) => s.setSelectedGroup);
+  const setView = useClipboardStore((s) => s.setView);
   const showFavorites = useClipboardStore((s) => s.showFavorites);
-  const setShowFavorites = useClipboardStore((s) => s.setShowFavorites);
-  const searchQuery = useClipboardStore((s) => s.searchQuery);
-  const { loadItems, loadGroups } = useDatabase();
   const [menu, setMenu] = useState<{ group: ClipboardGroup; x: number; y: number } | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<ClipboardGroup | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ClipboardGroup | null>(null);
 
+  // 列表重查由 useClipboardListener 对 store(选中分组/收藏过滤)的订阅负责,
+  // 分组列表重查由 useDatabase 对 groups-changed 事件的监听负责 ——
+  // 此处再显式 loadItems/loadGroups 会与之重复,每次操作发出 2-3 次相同查询
   const handleSelectGroup = (group: typeof selectedGroup) => {
-    setShowFavorites(false);
-    setSelectedGroup(group);
-    loadItems(searchQuery || undefined, group?.id ?? null, false);
+    // 一次 set 同时更新两个字段:分开 set 会触发订阅方两次重查
+    setView({ selectedGroup: group, showFavorites: false });
   };
 
   const handleShowFavorites = () => {
-    setSelectedGroup(null);
-    setShowFavorites(true);
-    loadItems(searchQuery || undefined, null, true);
+    setView({ selectedGroup: null, showFavorites: true });
   };
 
   const handleShowAll = () => {
-    setSelectedGroup(null);
-    setShowFavorites(false);
-    loadItems(searchQuery || undefined, null, false);
+    setView({ selectedGroup: null, showFavorites: false });
   };
 
-  // 以下三个 handler 失败时直接 throw,由对话框内联展示错误
+  // 以下 handler 失败时直接 throw,由对话框内联展示错误
   const handleCreate = async (name: string) => {
     await invoke('create_group', { name });
-    await loadGroups();
     setCreateOpen(false);
   };
 
   const handleRename = async (group: ClipboardGroup, name: string) => {
     await invoke('update_group', { id: group.id, name, icon: group.icon });
-    await loadGroups();
-    // 同步选中分组的最新名称
+    // 分组列表由 groups-changed 事件刷新;这里只同步选中分组的最新名称
     if (useClipboardStore.getState().selectedGroup?.id === group.id) {
       setSelectedGroup({ ...group, name });
     }
@@ -61,11 +54,8 @@ export function GroupTabs() {
 
   const handleDelete = async (group: ClipboardGroup) => {
     await invoke('delete_group', { id: group.id });
-    await loadGroups();
-    if (useClipboardStore.getState().selectedGroup?.id === group.id) {
-      setSelectedGroup(null);
-      loadItems(searchQuery || undefined, null, false);
-    }
+    // useDatabase 对 groups-changed 的监听会重查分组,并把已删除的
+    // 选中分组清空(连带触发列表重查),这里无需再处理选中态
     setDeleteTarget(null);
   };
 

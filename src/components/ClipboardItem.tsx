@@ -1,6 +1,7 @@
 import { memo, useState, useEffect, useCallback, useRef } from 'react';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { useClipboardStore } from '../stores/clipboardStore';
+import { dbTimeToDate, formatBytes } from '../lib/format';
 import type { ClipboardItem as ClipboardItemType, ClipboardType } from '../types/clipboard';
 import { ClipboardType as CT } from '../types/clipboard';
 import {
@@ -55,26 +56,15 @@ function getFileMeta(content: string): { name: string; meta: string } {
 }
 
 function formatImageTitle(dateStr: string): string {
-  const normalized = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
-  const d = new Date(normalized);
-  if (isNaN(d.getTime())) return '图片';
+  const d = dbTimeToDate(dateStr);
+  if (!d) return '图片';
   const pad = (n: number) => String(n).padStart(2, '0');
   return `图片 ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function formatTime(dateStr: string): string {
-  // SQLite datetime('now') 存的是 UTC,形如 "YYYY-MM-DD HH:MM:SS"。
-  // new Date() 会把它当本地时间解析,必须显式补 'T' 和 'Z' 标记为 UTC。
-  const normalized = dateStr.includes('T')
-    ? dateStr
-    : dateStr.replace(' ', 'T') + 'Z';
-  const date = new Date(normalized);
+  const date = dbTimeToDate(dateStr);
+  if (!date) return '';
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
