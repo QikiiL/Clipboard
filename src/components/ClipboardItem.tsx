@@ -79,6 +79,18 @@ function formatTime(dateStr: string): string {
   return `${diffDays}天前`;
 }
 
+/** 窄面板(<360px)用的紧凑格式:宽度不够放下「21分钟前」,但时间线索
+ *  不能整个消失 —— 那是用户判断「多久之前复制的」唯一途径 */
+function formatTimeCompact(dateStr: string): string {
+  const date = dbTimeToDate(dateStr);
+  if (!date) return '';
+  const diffMins = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (diffMins < 1) return '刚刚';
+  if (diffMins < 60) return `${diffMins}分`;
+  if (diffMins < 1440) return `${Math.floor(diffMins / 60)}时`;
+  return `${Math.floor(diffMins / 1440)}天`;
+}
+
 export const ClipboardItemCard = memo(function ClipboardItemCard({
   item,
   onActivate,
@@ -339,7 +351,14 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
         {item.group_id !== null && (
           <span className="text-accent mr-2"><FolderFillIcon size={13} /></span>
         )}
-        <span className="text-[11px] text-faint tabular-nums @max-narrow:hidden @min-wide:text-[12px]">{formatTime(item.last_used_at)}</span>
+        {/* 时间任何宽度下都可见:窄面板用紧凑格式,不再整体隐藏(此前
+            @max-narrow:hidden 会让 360px 以下的窗口完全失去时间线索) */}
+        <span className="text-[11px] text-faint tabular-nums hidden @max-narrow:inline">
+          {formatTimeCompact(item.last_used_at)}
+        </span>
+        <span className="text-[11px] text-faint tabular-nums @max-narrow:hidden @min-wide:text-[12px]">
+          {formatTime(item.last_used_at)}
+        </span>
         {!boxMode && (
           <div className="flex items-center pl-2 w-0 overflow-hidden group-hover:w-[118px] group-focus-within:w-[118px] transition-[width] duration-150 ease-out @max-narrow:pl-1 @max-narrow:group-hover:w-[98px] @max-narrow:group-focus-within:w-[98px] @min-wide:group-hover:w-[130px] @min-wide:group-focus-within:w-[130px]">
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150">
