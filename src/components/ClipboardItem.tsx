@@ -442,7 +442,8 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
         </>
       )}
       {boxMode && boxSelected && !boxUsed && boxOrder !== null && (
-        // 粘贴顺序徽标:按界面从上到下编号,最上面的是第 1 条(FIFO 队首)
+        // 粘贴顺序徽标:真 FIFO —— 列表最下方(最早复制)的是第 1 条,
+        // 最新复制的最后粘出
         <span className="absolute -top-1.5 -right-1.5 z-20 flex items-center justify-center h-[18px] min-w-[18px] px-1 rounded-full bg-accent text-on-accent text-[10px] font-bold leading-none tabular-nums shadow-lift pointer-events-none">
           {boxOrder}
         </span>
