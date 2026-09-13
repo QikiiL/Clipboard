@@ -1,7 +1,7 @@
 {
-  "version": "0.4.2",
-  "notes": "修复版本\n- 修复每次启动软件都会把剪贴板里残留的旧内容重新记录一遍、时间显示刚刚的问题\n- 删除该记录后重启软件也不会再次生成\n- 启动后新复制的内容照常实时记录",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v0.4.2",
+  "version": "0.4.3",
+  "notes": "修复版本\n- 修复连续粘贴框选时,拖拽中用滚轮翻页会丢失已框选内容的问题\n- 框选改为累积制:滚轮翻页、分屏多次拖拽,选择持续累加不丢失\n- 误选可单击条目取消,或用「清空」按钮/点击列表空白处重来",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v0.4.3",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }
