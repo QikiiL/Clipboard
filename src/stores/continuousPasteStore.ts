@@ -38,8 +38,8 @@ interface ContinuousPasteStore {
   toggleSelect: (id: number) => void;
   /** shift+点击:从锚点到该条目的显示区间全选 */
   selectRangeTo: (id: number) => void;
-  /** 橡皮筋框选结束:应用预览集合(additive = 按住 Ctrl/Shift 追加) */
-  applyBand: (ids: number[], additive: boolean) => void;
+  /** 橡皮筋框选结束:并入选中集合(累积制;清空用 clearSelection) */
+  applyBand: (ids: number[]) => void;
   setBandPreview: (ids: number[]) => void;
   clearSelection: () => void;
   recomputeOrder: () => void;
@@ -133,12 +133,11 @@ export const useContinuousPasteStore = create<ContinuousPasteStore>((set, get) =
     get().recomputeOrder();
   },
 
-  applyBand: (ids, additive) => {
-    const selectedIds = additive
-      ? new Set([...get().selectedIds, ...ids])
-      : ids.length
-        ? new Set(ids)
-        : EMPTY_SET;
+  applyBand: (ids) => {
+    // 累积制:并入现有选择 —— 配合滚轮翻页/多次拖拽框长列表时,
+    // 先前框住的条目不会被新框替换;清空走 clearSelection(按钮/空白单击)
+    const selectedIds = new Set(get().selectedIds);
+    for (const id of ids) selectedIds.add(id);
     set({ selectedIds, bandPreview: EMPTY_SET });
     get().recomputeOrder();
   },

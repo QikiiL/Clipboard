@@ -41,7 +41,7 @@ export function ClipboardList() {
 
   const bandEnabled = boxMode && !queueActive;
   const handleBandApply = useCallback(
-    (ids: number[], additive: boolean) => applyBand(ids, additive),
+    (ids: number[]) => applyBand(ids),
     [applyBand]
   );
   const handleBandPreview = useCallback(
