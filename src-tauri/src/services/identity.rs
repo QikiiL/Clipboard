@@ -244,7 +244,11 @@ fn force_reregister(msix: &std::path::Path, external_loc: &std::path::Path) -> R
     };
     for pkg in packages {
         if let Ok(full_name) = pkg.Id().and_then(|id| id.FullName()) {
-            let _ = pm.RemovePackageAsync(&full_name);
+            // 必须等卸载真正完成再注册:RemovePackageAsync 是异步操作,
+            // 丢弃返回值就立刻 AddPackageByUriAsync 会因同名包仍在而冲突失败
+            if let Ok(op) = pm.RemovePackageAsync(&full_name) {
+                let _ = op.get();
+            }
         }
     }
     register(msix, external_loc)

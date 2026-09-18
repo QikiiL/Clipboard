@@ -97,9 +97,13 @@ pub fn map_key_code(key: &str) -> Option<Code> {
     }
 }
 
-/// Build a Shortcut from modifier+key strings. Returns None if key is unsupported.
+/// Build a Shortcut from modifier+key strings. Returns None if key is unsupported
+/// or no modifier is present (裸键会全局吞掉单个字母键,必须拒绝).
 pub fn build_shortcut(modifier: &str, key: &str) -> Option<Shortcut> {
     let mods = parse_modifiers(modifier);
+    if mods.is_empty() {
+        return None;
+    }
     let code = map_key_code(key)?;
     Some(Shortcut::new(Some(mods), code))
 }

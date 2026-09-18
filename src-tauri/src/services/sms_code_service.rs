@@ -554,8 +554,10 @@ pub fn extract_code(body: &str) -> Option<String> {
         if len == 8 && looks_like_date(&digits) {
             continue;
         }
-        // 前文 3 个字符内的负向关键词 → 那是尾号不是验证码
-        let prefix: String = chars[start.saturating_sub(3)..start].iter().collect();
+        // 前文 6 个字符内的负向关键词 → 那是尾号/卡号不是验证码。
+        // 3 字符窗口盖不住「尾号 - 1234」「尾号****1234」这类带分隔符的写法,
+        // 漏判会把尾号当验证码提走并覆盖用户剪贴板;放宽到 6 仍紧邻,不会误伤
+        let prefix: String = chars[start.saturating_sub(6)..start].iter().collect();
         if NEGATIVE_PREFIXES.iter().any(|p| prefix.contains(p)) {
             continue;
         }

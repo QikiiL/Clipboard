@@ -79,6 +79,10 @@ pub const MOD_WIN: u32 = 8;
 static HOOK_HANDLE: AtomicIsize = AtomicIsize::new(0);
 static HOOK_THREAD_ID: AtomicU32 = AtomicU32::new(0);
 static INSTALLED: AtomicBool = AtomicBool::new(false);
+// 卸载在途标志:uninstall 已投递 WM_QUIT 但钩子线程尚未真正 Unhook。
+// install 必须等它清零,否则会装出第二个钩子——一次物理按键双钩子都触发,
+// 连续粘贴一次出队两条
+static UNINSTALLING: AtomicBool = AtomicBool::new(false);
 static CFG_MODS: AtomicU32 = AtomicU32::new(MOD_CTRL);
 static CFG_KEY_VK: AtomicU32 = AtomicU32::new(0);
 static LAST_TRIGGER_TICK: AtomicU32 = AtomicU32::new(0);
@@ -127,6 +131,18 @@ pub fn install(app: AppHandle, mods: u32, key_vk: u32) -> bool {
     if INSTALLED.load(Ordering::SeqCst) {
         return true;
     }
+    // 等待在途卸载收尾(钩子泵收到 WM_QUIT 是毫秒级);有界等待,
+    // 超时按失败处理,交上层走默认步进兜底
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while UNINSTALLING.load(Ordering::SeqCst) {
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    if INSTALLED.load(Ordering::SeqCst) {
+        return true;
+    }
 
     let (tx, rx) = std::sync::mpsc::channel::<bool>();
     std::thread::spawn(move || {
@@ -148,13 +164,18 @@ pub fn install(app: AppHandle, mods: u32, key_vk: u32) -> bool {
         unsafe { UnhookWindowsHookEx(hhook) };
         HOOK_HANDLE.store(0, Ordering::SeqCst);
         INSTALLED.store(false, Ordering::SeqCst);
+        UNINSTALLING.store(false, Ordering::SeqCst);
     });
     rx.recv_timeout(Duration::from_secs(2)).unwrap_or(false)
 }
 
 /// 卸载钩子(幂等)。向钩子线程投递 WM_QUIT,由线程自己完成卸载
 pub fn uninstall() {
+    // 先立 UNINSTALLING 再查 INSTALLED:顺序反了的话,并发 install 会在
+    // 两个 store 的间隙里溜过去,装出第二个钩子
+    UNINSTALLING.store(true, Ordering::SeqCst);
     if !INSTALLED.swap(false, Ordering::SeqCst) {
+        UNINSTALLING.store(false, Ordering::SeqCst);
         return;
     }
     let thread_id = HOOK_THREAD_ID.load(Ordering::SeqCst);

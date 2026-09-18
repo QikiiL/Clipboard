@@ -219,7 +219,7 @@ pub fn run() {
             let mut startup_shortcut = if saved_settings.win_v_integration {
                 Shortcut::new(Some(Modifiers::SUPER), Code::KeyV)
             } else {
-                build_shortcut_from_settings(
+                utils::hotkey::build_shortcut(
                     &saved_settings.hotkey_modifier,
                     &saved_settings.hotkey_key,
                 )
@@ -235,32 +235,55 @@ pub fn run() {
                     .on_shortcut(shortcut.clone(), commands::window::toggle_on_press)
                     .map_err(|e| e.to_string())
             };
-            let mut last_err = String::new();
-            let mut registered = false;
-            for attempt in 0..4 {
-                if attempt > 0 {
-                    std::thread::sleep(std::time::Duration::from_millis(1500));
-                }
-                match register_fn(&startup_shortcut) {
-                    Ok(()) => {
-                        registered = true;
-                        break;
-                    }
-                    Err(e) => last_err = e,
-                }
-            }
-            if !registered {
+            // 首次注册立即尝试;失败(如开机时系统尚未释放 Win+V)不再同步
+            // 睡眠重试——那会把 setup 卡住最多 6 秒,窗口创建被拖慢。
+            // 策略:立即注册兜底键保证可用,原热键转后台线程重试接管
+            if let Err(e) = register_fn(&startup_shortcut) {
                 eprintln!(
                     "Failed to register hotkey {:?}: {}. Falling back to Ctrl+Shift+V.",
-                    startup_shortcut, last_err
+                    startup_shortcut, e
                 );
                 let fallback = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::KeyV);
                 register_fn(&fallback)?;
-                let mut s = saved_settings.clone();
-                s.win_v_integration = false;
-                s.hotkey_modifier = "Ctrl+Shift".to_string();
-                s.hotkey_key = "V".to_string();
-                let _ = services::settings_service::save_settings(app.handle(), &s);
+                // 不持久化任何改动:保留 win_v_integration 标志与用户自定义热键,
+                // 下次启动继续尝试原热键(与 enable_win_v_integration 的兜底策略一致),
+                // 此前这里直接把开关写回 false,会静默关掉用户已开启的 Win+V 接管
+                if saved_settings.win_v_integration {
+                    // 系统常在登录后延迟释放 Win+V:后台重试接管,成功则替换兜底键
+                    let app_handle = app.handle().clone();
+                    let desired = startup_shortcut;
+                    std::thread::spawn(move || {
+                        let mut taken = false;
+                        for _ in 0..3 {
+                            std::thread::sleep(std::time::Duration::from_millis(1500));
+                            if app_handle
+                                .global_shortcut()
+                                .on_shortcut(desired, commands::window::toggle_on_press)
+                                .is_ok()
+                            {
+                                taken = true;
+                                break;
+                            }
+                        }
+                        if !taken {
+                            return;
+                        }
+                        // 仅当当前热键仍是兜底键时替换,避免与用户此间的手动改键打架;
+                        // 用户已改键则注销刚注册的 Win+V,避免残留双热键
+                        if let Some(last_state) =
+                            app_handle.try_state::<commands::window::LastHotkey>()
+                        {
+                            let mut last =
+                                last_state.0.lock().unwrap_or_else(|err| err.into_inner());
+                            if last.as_ref() == Some(&fallback) {
+                                let _ = app_handle.global_shortcut().unregister(fallback);
+                                *last = Some(desired);
+                            } else {
+                                let _ = app_handle.global_shortcut().unregister(desired);
+                            }
+                        }
+                    });
+                }
                 startup_shortcut = fallback;
             }
             app.manage(commands::window::LastHotkey(std::sync::Mutex::new(Some(
@@ -430,13 +453,6 @@ async fn cleanup_expired_items(app_handle: &tauri::AppHandle) {
             eprintln!("VACUUM after cleanup failed: {}", e);
         }
     }
-}
-
-fn build_shortcut_from_settings(
-    modifier: &str,
-    key: &str,
-) -> Option<tauri_plugin_global_shortcut::Shortcut> {
-    utils::hotkey::build_shortcut(modifier, key)
 }
 
 fn get_migrations() -> Vec<tauri_plugin_sql::Migration> {

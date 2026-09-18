@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '../lib/openUrl';
 
 export interface UpdateInfo {
   current: string;
@@ -14,10 +15,6 @@ export interface UpdateInfo {
 interface Props {
   info: UpdateInfo;
   onClose: () => void;
-}
-
-function openUrl(url: string) {
-  invoke('open_external_url', { url }).catch((err) => console.error('Open URL failed:', err));
 }
 
 /** 把更新说明拆成分点:优先按换行,兼容旧清单用分号分隔的写法 */

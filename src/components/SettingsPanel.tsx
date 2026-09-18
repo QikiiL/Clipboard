@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS } from '../types/settings';
 import { XIcon } from './icons';
 import { PromptDialog } from './Dialogs';
 import { parseUpdateNotes, type UpdateInfo } from './UpdateDialog';
+import { openUrl } from '../lib/openUrl';
 
 interface Props {
   isOpen: boolean;
@@ -218,6 +219,13 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
     const isValidKey = /^[a-zA-Z0-9]$/.test(e.key);
     if (!isValidKey) return;
 
+    // 裸键(无修饰键)会注册成全局单键热键,单按一个字母就唤出面板,必须拦下;
+    // 不结束录制状态,让用户补按修饰键
+    if (modifiers.length === 0) {
+      alert('请至少搭配一个修饰键（Ctrl / Alt / Shift / Win）');
+      return;
+    }
+
     const modifier = modifiers.join('+');
     const mainKey = e.key.toUpperCase();
     const isSeq = recordingRef.current === 'seq_paste';
@@ -362,10 +370,6 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
     } finally {
       setUpdateChecking(false);
     }
-  };
-
-  const openUrl = (url: string) => {
-    invoke('open_external_url', { url }).catch(console.error);
   };
 
   // 与 UpdateDialog 相同的双保险:点击下载自动复制密码 + 明文展示可手动复制

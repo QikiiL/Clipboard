@@ -6,7 +6,7 @@ import { SearchIcon, XIcon } from './icons';
 export function SearchBar() {
   const [inputValue, setInputValue] = useState('');
   const debouncedQuery = useDebounce(inputValue, 300);
-  const { setSearchQuery } = useClipboardStore();
+  const setSearchQuery = useClipboardStore((s) => s.setSearchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

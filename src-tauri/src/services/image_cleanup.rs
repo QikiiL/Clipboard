@@ -1,16 +1,10 @@
-/// 删除条目对应的图片文件,仅当文件位于应用的 images 目录内时才执行,
-/// 避免误删任意路径。文件不存在时静默跳过。
+/// 删除条目对应的图片文件。路径守卫统一走 storage_service::resolve_image_path
+/// (与读取/粘贴同源,见 SECURITY-AUDIT 三条消费路径守卫约定),
+/// 越界或文件不存在时静默跳过。
 pub fn remove_image_file(app_handle: &tauri::AppHandle, file_path: &str) {
-    let images_dir = crate::services::storage_service::images_dir(app_handle);
-    let canonical_images = match std::fs::canonicalize(&images_dir) {
-        Ok(p) => p,
-        Err(_) => return,
-    };
-    let canonical = match std::fs::canonicalize(file_path) {
-        Ok(p) => p,
-        Err(_) => return,
-    };
-    if canonical.starts_with(&canonical_images) {
+    if let Some(canonical) =
+        crate::services::storage_service::resolve_image_path(app_handle, file_path)
+    {
         let _ = std::fs::remove_file(&canonical);
     }
 }

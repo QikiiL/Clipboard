@@ -327,7 +327,7 @@ const PATTERN_SIZE_LIMIT: usize = 1 << 20;
 /// 三个字段都带 default:老配置文件没有这些字段时等价于"不排除任何内容",
 /// 不会因反序列化失败而回退整套设置。未知字段由 serde 自动忽略,
 /// 因此可以直接从完整的 AppSettings JSON 里反序列化出这一段。
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 struct ExclusionConfig {
     excluded_apps: Vec<String>,
@@ -337,6 +337,20 @@ struct ExclusionConfig {
     #[serde(default = "default_detect_sensitive")]
     detect_sensitive: bool,
     excluded_allowlist: Vec<String>,
+}
+
+/// 手写 Default:derive 会把 bool 落成 false,与字段级 serde default(true)
+/// 矛盾——配置解析失败/存储打开失败走 ExclusionConfig::default() 时,
+/// 敏感识别会被静默关掉,违背「宁可多拦一条」的安全取舍
+impl Default for ExclusionConfig {
+    fn default() -> Self {
+        Self {
+            excluded_apps: Vec::new(),
+            excluded_patterns: Vec::new(),
+            detect_sensitive: true,
+            excluded_allowlist: Vec::new(),
+        }
+    }
 }
 
 fn default_detect_sensitive() -> bool {
