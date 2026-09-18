@@ -1,7 +1,7 @@
 {
-  "version": "0.4.4",
-  "notes": "修复版本\n- 连续粘贴改为真·先进先出:最早复制的内容最先粘贴(序号①在列表最下方选中项上),还原复制时的先后顺序\n- 修复窗口较窄时每条记录的时间显示整体消失的问题:任何窗口宽度都显示完整的相对时间(如21分钟前)",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v0.4.4",
+  "version": "1.0.0",
+  "notes": "1.0.0 正式版\n- 修复开机自启时 Win+V 接管失败会被自动关闭的问题:现在改为后台自动重试,并保留你的设置\n- 修复自定义快捷键可能失效:录制快捷键必须搭配修饰键,避免单键误触发\n- 修复连续粘贴偶尔多粘贴一条的问题\n- 修复短信中的卡号/尾号被误当作验证码提取的问题\n- 修复配置读取异常时敏感信息识别被静默关闭的问题",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.0.0",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }
