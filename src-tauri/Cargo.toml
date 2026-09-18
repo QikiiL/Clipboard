@@ -3,6 +3,7 @@ name = "clipboard-manager-tauri"
 version = "1.0.0"
 description = "A clipboard manager built with Tauri"
 authors = ["you"]
+license = "MIT"
 edition = "2021"
 
 # 发布构建:链接期优化 + 去符号,减小体积与常驻内存

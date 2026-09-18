@@ -220,4 +220,12 @@ SDK 10.0.26100.0)。
 
 ## License
 
-待定(TODO:开源前请选择协议,如 MIT / GPL-3.0)
+本项目采用 [MIT 协议](LICENSE)开源,© 2026 QikiiL —— 可自由使用、修改、分发(含商业用途),只需保留版权与许可声明。
+
+### 第三方声明
+
+- **短信验证码捕获**的技术路径(轮询 Windows 通知中心 `UserNotificationListener`、按 AUMID 过滤 Phone Link 通知)来自对 **[TeleLink](https://github.com/nicholasxdavis/telelink)**(Python,MIT 协议)的逆向调研与同款实现,特此致谢;其版权与许可声明见该项目仓库。设计取舍记录在 [`docs/SMS-CODE-DESIGN.md`](docs/SMS-CODE-DESIGN.md)。
+- **运行时组件**(主要):[Tauri](https://tauri.app/)、`sqlx`、`arboard`、`enigo`、`ureq`、`image`、`windows` 系列等 Rust 依赖,以及 [React](https://react.dev/)、[Tailwind CSS](https://tailwindcss.com/)、[Zustand](https://github.com/pmndrs/zustand)、[TanStack Virtual](https://tanstack.com/virtual) 等前端依赖 —— 均为 **MIT 或 Apache-2.0** 协议。
+- **打包工具**:[NSIS](https://nsis.sourceforge.io/)(zlib/libpng 协议)。
+- **Microsoft Edge WebView2 运行时**:由安装向导按需从微软官方地址下载并按系统策略安装,遵循其自身的许可条款。
+
