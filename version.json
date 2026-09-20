@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "notes": "1.0.0 正式版\n- 修复开机自启时 Win+V 接管失败会被自动关闭的问题:现在改为后台自动重试,并保留你的设置\n- 修复自定义快捷键可能失效:录制快捷键必须搭配修饰键,避免单键误触发\n- 修复连续粘贴偶尔多粘贴一条的问题\n- 修复短信中的卡号/尾号被误当作验证码提取的问题\n- 修复配置读取异常时敏感信息识别被静默关闭的问题",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.0.0",
+  "version": "1.0.1",
+  "notes": "1.0.1 修复版\n- 修复升级/覆盖安装时报「无法打开要写入的文件: sms-helper.exe」导致安装失败的问题:后台驻留的短信助手进程会锁住安装文件,安装器现在会自动先结束运行中的主程序与短信助手再写入文件,无需手动结束进程或重启电脑",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.0.1",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }

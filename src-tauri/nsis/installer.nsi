@@ -348,23 +348,13 @@ Function PageLeaveReinstall
     ClearErrors
 
     ; ==== clipboard 项目定制(基于 tauri-v2.11.2 官方模板,升级时同步) ====
-    ; 运行旧版卸载器前先结束正在运行的应用。安装器已 RequestExecutionLevel
-    ; admin,taskkill 可直接结束提权应用,无需 PowerShell 中转(会被安全软件
-    ; 拦截)。要点:
-    ; 1) 用退出码判断:0=已结束 128=未运行 其他(255)=无法结束(如僵尸进程)
-    ;    (FindProcessCurrentUser 看不到提权进程,不可用)
-    ; 2) 不用 /T 树杀:先杀 WebView2 子进程会把主进程卡成杀不掉的僵尸,
-    ;    必须先杀主进程,子进程随之退出
-    app_kill_retry:
-      nsExec::ExecToStack 'taskkill /F /IM "clipboard-manager-tauri.exe"'
-      Pop $0
-      Pop $9
-      Sleep 500
-      ${If} $0 <> 0
-      ${AndIf} $0 <> 128
-        MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "剪贴板管理器正在运行但无法自动结束。$\n$\n请从系统托盘图标右键退出应用,或在任务管理器中结束 clipboard-manager-tauri.exe(若结束不掉说明进程已僵死,重启电脑后再安装),然后点击「重试」。$\n$\n点击「取消」将退出安装。" IDRETRY app_kill_retry
-        Abort "无法关闭正在运行的剪贴板管理器"
-      ${EndIf}
+    ; 运行旧版卸载器前先结束正在运行的应用与短信助手。宏定义在
+    ; nsis-hooks.nsh(模板头部已 include):先杀主程序(防监工循环重新
+    ; 拉起 helper),再杀 Shell 激活的 helper 孤儿进程 —— 不杀的话旧
+    ; 卸载器删不掉 sms-helper.exe。安装器已 RequestExecutionLevel
+    ; admin,taskkill 可直接结束提权应用,无需 PowerShell 中转(会被
+    ; 火绒等安全软件拦截)
+    !insertmacro KILL_RUNNING_APP
     ; ==== 定制结束 ====
 
     ${If} $WixMode = 1
