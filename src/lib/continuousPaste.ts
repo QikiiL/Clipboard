@@ -1,38 +1,30 @@
 /**
  * 连续粘贴(框选模式)的纯逻辑。
  *
- * 队列顺序 = 真·先进先出(FIFO),按内容被**复制的时间先后**:
- * 列表按时间倒序展示(顶部最新、底部最旧),所以从列表**底部往上**遍历 ——
- * 最早复制的内容最先粘贴,最新复制的最后粘贴。例如依次复制 A、B、C,
- * 列表显示 C、B、A,框选三者后的粘贴顺序是 A → B → C。
+ * 队列顺序 = 用户**点选的先后顺序**:先点的先粘,后点的后粘。
+ * 框选(橡皮筋)没有逐条点击,按条目在列表里的显示顺序(从上到下)入队;
+ * Shift + 点击区间按手势方向(锚点 → 点击处)入队。
  */
 
-/** 框选集合 → 粘贴队列:按复制时间先后(列表从底部到顶部)排序,FIFO 出队 */
-export function orderQueueByDisplay(
-  selected: Iterable<number>,
-  items: { id: number }[]
+/** 选择序列 → 粘贴队列:按点选先后顺序,过滤已取消的 id,重复 id 只入队一次 */
+export function orderQueueBySelection(
+  selectionOrder: number[],
+  selected: Set<number>
 ): number[] {
-  const pending = new Set(selected);
+  const seen = new Set<number>();
   const ordered: number[] = [];
-  for (let i = items.length - 1; i >= 0; i--) {
-    const item = items[i];
-    if (pending.has(item.id)) {
-      ordered.push(item.id);
-      pending.delete(item.id); // 同一 id 只入队一次
+  for (const id of selectionOrder) {
+    if (selected.has(id) && !seen.has(id)) {
+      ordered.push(id);
+      seen.add(id);
     }
   }
   return ordered;
 }
 
-/** 框选集合 → 每条的粘贴序号(从 1 起,复制最早的为 1),用于条目上的顺序徽标 */
-export function buildOrderMap(
-  selected: Iterable<number>,
-  items: { id: number }[]
-): Map<number, number> {
+/** 粘贴队列 → 每条的粘贴序号(从 1 起,先点的为 1),用于条目上的顺序徽标 */
+export function buildOrderMap(queue: number[]): Map<number, number> {
   const map = new Map<number, number>();
-  let order = 1;
-  for (const id of orderQueueByDisplay(selected, items)) {
-    map.set(id, order++);
-  }
+  queue.forEach((id, index) => map.set(id, index + 1));
   return map;
 }

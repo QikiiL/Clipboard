@@ -6,7 +6,8 @@
 //! 只有活在整个应用生命周期里的 Rust 状态,才能跨窗口销毁/重建接管队列。
 //!
 //! 交互约定:
-//! - `begin(ids)` 的 ids 顺序即粘贴顺序(界面从上到下,时间倒序),FIFO 出队;
+//! - `begin(ids)` 的 ids 顺序即粘贴顺序(前端按点选先后传入,见
+//!   src/lib/continuousPaste.ts),FIFO 出队;
 //! - 「开始」只武装不粘贴:窗口隐藏、焦点交还目标应用,第一条等用户按下
 //!   物理触发热键(默认 Ctrl+V,低级键盘钩子拦截,见 utils/paste_hook);
 //! - 快速连按不丢:投递忙碌期间的按键记入待办计数,当前条目完成后自动补上;
@@ -89,7 +90,7 @@ impl ContinuousPasteState {
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// 开启新一轮队列(替换旧队列)。ids 顺序 = 粘贴顺序(界面从上到下)。
+    /// 开启新一轮队列(替换旧队列)。ids 顺序 = 粘贴顺序(前端按点选先后传入)。
     /// 顺带卸掉上一轮可能残留的步进钩子,由各启动路径决定是否重新武装
     pub fn begin(&self, ids: Vec<i64>) {
         let total = ids.len();
@@ -245,17 +246,23 @@ async fn run_once_inner(app: &AppHandle) -> Result<(), String> {
         };
         // 队列开始后窗口通常已销毁,前台即目标应用,不动焦点 —— 粘贴落进
         // 用户当前光标所在的输入框;窗口还开着时(面板内点「粘贴下一条」)
-        // 先销毁窗口并把焦点还给唤出前记录的目标
-        let hide_first = app
+        // 先销毁窗口并把焦点还给唤出前记录的目标。「粘贴后保持打开」不影响
+        // 此路径:开始连贴时面板本来就会立即隐藏
+        let handling = if app
             .get_webview_window("main")
             .map(|w| w.is_visible().unwrap_or(false))
-            .unwrap_or(false);
+            .unwrap_or(false)
+        {
+            paste_service::FocusHandling::HideFirst
+        } else {
+            paste_service::FocusHandling::AtTarget
+        };
         // 模拟的 Ctrl+V 是注入事件,步进钩子会原样放行,投递期间无需
         // 任何"热键真空期" —— 物理连按全程可被捕获排队
         match paste_service::deliver_item_by_id(
             app,
             id,
-            hide_first,
+            handling,
             true,
             STEP_SUPPRESS_MS,
         )
