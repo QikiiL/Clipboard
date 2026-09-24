@@ -1,7 +1,7 @@
 {
-  "version": "1.0.1",
-  "notes": "1.0.1 修复版\n- 修复升级/覆盖安装时报「无法打开要写入的文件: sms-helper.exe」导致安装失败的问题:后台驻留的短信助手进程会锁住安装文件,安装器现在会自动先结束运行中的主程序与短信助手再写入文件,无需手动结束进程或重启电脑",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.0.1",
+  "version": "1.1.0",
+  "notes": "1.1.0 功能更新\n- 新增「粘贴后保持打开」开关(主界面右上按钮区):开启后单击条目只把焦点交还目标窗口,面板不再自动隐藏,对着同一个窗口连续粘贴多条内容更顺手;默认关闭,关闭时行为与旧版完全一致\n- 连续粘贴(框选模式)的粘贴顺序改为按点选先后:先点的先粘、后点的后粘,条目右上角的 ①②③ 徽标实时反映当前顺序;旧版按内容复制时间先后(列表从下往上)排序",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.1.0",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }
