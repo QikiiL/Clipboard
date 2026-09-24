@@ -13,6 +13,15 @@ pub fn save_settings(app_handle: tauri::AppHandle, settings: AppSettings) -> Res
     crate::services::settings_service::save_settings(&app_handle, &settings)
 }
 
+/// 「粘贴后保持打开」:开启后单击条目不销毁面板,只把前台焦点还给目标窗口。
+/// 与 set_always_on_top 同款模式:即改即存,下次单击立即生效
+#[tauri::command]
+pub fn set_keep_open(app_handle: tauri::AppHandle, keep_open: bool) -> Result<(), String> {
+    let mut settings = crate::services::settings_service::load_settings(&app_handle);
+    settings.keep_open_on_paste = keep_open;
+    crate::services::settings_service::save_settings(&app_handle, &settings)
+}
+
 /// 豁免条目上限。名单只增不减会随使用时间无限膨胀,而老条目几乎不会再被复制
 /// 到;超过上限时丢弃最早加入的(新条目追加在尾部,头部即最早)
 const ALLOWLIST_MAX: usize = 200;

@@ -13,6 +13,7 @@ import { CloseConfirmDialog } from './components/CloseConfirmDialog';
 import { useContinuousPasteStore } from './stores/continuousPasteStore';
 import {
   PinIcon,
+  AppWindowIcon,
   SettingsIcon,
   MinusIcon,
   MaximizeIcon,
@@ -28,6 +29,7 @@ function AppContent() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [pinned, setPinned] = useState(true);
+  const [keepOpen, setKeepOpen] = useState(false);
   const [maximized, setMaximized] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const cpMode = useContinuousPasteStore((s) => s.mode);
@@ -100,8 +102,11 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    invoke<{ pinned?: boolean }>('load_settings')
-      .then((s) => setPinned(s.pinned ?? true))
+    invoke<{ pinned?: boolean; keep_open_on_paste?: boolean }>('load_settings')
+      .then((s) => {
+        setPinned(s.pinned ?? true);
+        setKeepOpen(s.keep_open_on_paste ?? false);
+      })
       .catch(console.error);
   }, []);
 
@@ -114,6 +119,16 @@ function AppContent() {
       console.error('Toggle pin failed:', err);
     }
   }, [pinned]);
+
+  const handleToggleKeepOpen = useCallback(async () => {
+    const next = !keepOpen;
+    try {
+      await invoke('set_keep_open', { keepOpen: next });
+      setKeepOpen(next);
+    } catch (err) {
+      console.error('Toggle keep-open failed:', err);
+    }
+  }, [keepOpen]);
 
   const handleCloseChoice = useCallback(async (choice: 'close' | 'minimize', remember: boolean) => {
     try {
@@ -169,6 +184,21 @@ function AppContent() {
               title={pinned ? '取消置顶' : '置顶:悬浮于所有应用之上'}
             >
               <PinIcon size={16} />
+            </button>
+            <button
+              onClick={handleToggleKeepOpen}
+              className={`flex items-center justify-center w-[30px] h-[30px] rounded-lg transition-colors @max-narrow:w-[26px] @max-narrow:h-[26px] ${
+                keepOpen
+                  ? 'bg-accent-soft text-accent'
+                  : 'text-muted hover:bg-hairline hover:text-faint'
+              }`}
+              title={
+                keepOpen
+                  ? '取消保持打开'
+                  : '保持打开:单击条目粘贴后面板不再自动隐藏'
+              }
+            >
+              <AppWindowIcon size={16} />
             </button>
             <button
               onClick={() => useContinuousPasteStore.getState().toggleMode()}

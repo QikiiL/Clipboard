@@ -13,6 +13,8 @@ export interface AppSettings {
   close_behavior: CloseBehavior;
   win_v_integration: boolean;
   pinned: boolean;
+  // 「粘贴后保持打开」:单击条目后不隐藏面板(仅把焦点还给目标窗口)
+  keep_open_on_paste: boolean;
   excluded_apps: string[];
   excluded_patterns: string[];
   detect_sensitive: boolean;
@@ -34,6 +36,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   close_behavior: 'ask',
   win_v_integration: false,
   pinned: true,
+  keep_open_on_paste: false,
   excluded_apps: ['keepass.exe', 'keepassxc.exe', '1password.exe', 'bitwarden.exe'],
   excluded_patterns: [],
   detect_sensitive: true,

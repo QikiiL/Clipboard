@@ -5,7 +5,21 @@ use std::time::Duration;
 extern "system" {
     fn GetForegroundWindow() -> isize;
     fn SetForegroundWindow(hwnd: isize) -> i32;
+    fn GetWindow(hwnd: isize, cmd: u32) -> isize;
+    fn IsWindowVisible(hwnd: isize) -> i32;
+    fn IsWindowEnabled(hwnd: isize) -> i32;
+    fn GetWindowLongW(hwnd: isize, nindex: i32) -> i32;
 }
+
+#[link(name = "dwmapi")]
+extern "system" {
+    fn DwmGetWindowAttribute(hwnd: isize, attr: u32, out: *mut u32, size: u32) -> i32;
+}
+
+const GW_HWNDNEXT: u32 = 2;
+const DWMWA_CLOAKED: u32 = 14;
+const GWL_EXSTYLE: i32 = -20;
+const WS_EX_TOPMOST: i32 = 0x0000_0008;
 
 /// 捕获当前前台窗口句柄。必须在本应用窗口显示之前调用,
 /// 此刻前台还是目标应用,粘贴按键要发还给这个窗口。
@@ -38,6 +52,33 @@ pub fn restore_target_focus(hwnd: isize) -> bool {
 /// 这里直接用原生 GetForegroundWindow 比对,作为判定兜底。
 pub fn is_foreground_window(hwnd: isize) -> bool {
     hwnd != 0 && unsafe { GetForegroundWindow() } == hwnd
+}
+
+/// 找出本窗口若被销毁时 Windows 会隐式激活的窗口:Z 序上本窗口下方第一个
+/// 可激活的**普通层**窗口。找不到返回 0。
+/// 「粘贴后保持打开」在唤出前没有可靠目标记录(应用启动即建窗、托盘打开)
+/// 或记录的目标已失效时,用它作为粘贴落点,对齐销毁路径的隐式激活结果。
+/// 必须跳过两类窗口,否则焦点会切到一个粘不进东西的目标上:
+/// - 置顶窗口(WS_EX_TOPMOST):面板自身默认置顶,悬在置顶层,紧挨其下的
+///   是任务栏等置顶壳窗口——粘贴目标(用户正在用的应用)在普通层;
+/// - UWP 幽灵窗口:IsWindowVisible 为真但被 DWM 遮蔽(cloaked)。
+pub fn find_window_below(our_hwnd: isize) -> isize {
+    unsafe {
+        let mut hwnd = GetWindow(our_hwnd, GW_HWNDNEXT);
+        while hwnd != 0 {
+            let topmost = GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST != 0;
+            if !topmost {
+                let mut cloaked: u32 = 0;
+                let is_cloaked = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &mut cloaked, 4) == 0
+                    && cloaked != 0;
+                if !is_cloaked && IsWindowVisible(hwnd) != 0 && IsWindowEnabled(hwnd) != 0 {
+                    return hwnd;
+                }
+            }
+            hwnd = GetWindow(hwnd, GW_HWNDNEXT);
+        }
+        0
+    }
 }
 
 /// 单击条目的目标行为(true = 粘贴到之前聚焦的输入框)与目标窗口句柄。

@@ -36,6 +36,10 @@ pub struct AppSettings {
     pub win_v_integration: bool,
     #[serde(default = "default_pinned")]
     pub pinned: bool,
+    // 「粘贴后保持打开」:开启后单击条目不再销毁面板,只把前台焦点还给
+    // 目标窗口。默认关闭(保持"隐藏即销毁"的低占用语义)
+    #[serde(default)]
+    pub keep_open_on_paste: bool,
     // 排除规则三件套,同样是为了兼容旧版 settings.json
     #[serde(default)]
     pub excluded_apps: Vec<String>,
@@ -87,6 +91,7 @@ impl Default for AppSettings {
             close_behavior: CloseBehavior::default(),
             win_v_integration: false,
             pinned: true,
+            keep_open_on_paste: false,
             // 预置常见密码管理器:从密码管理器复制出来的密码是明文泄漏的头号
             // 来源,默认拦掉比等用户自己发现设置项更稳妥
             excluded_apps: vec![
@@ -127,6 +132,7 @@ mod tests {
         assert!(!settings.paused);
         assert_eq!(settings.close_behavior, CloseBehavior::Ask);
         assert!(!settings.win_v_integration);
+        assert!(!settings.keep_open_on_paste);
         assert_eq!(settings.seq_paste_modifier, "Ctrl");
         assert_eq!(settings.seq_paste_key, "V");
     }

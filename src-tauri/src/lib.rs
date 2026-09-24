@@ -342,6 +342,7 @@ pub fn run() {
             commands::settings::save_settings,
             commands::settings::load_settings,
             commands::settings::allow_excluded_item,
+            commands::settings::set_keep_open,
             commands::sms_code::sms_code_status,
             commands::sms_code::sms_code_request_access,
             commands::sms_code::open_notification_settings,

@@ -15,10 +15,19 @@ pub async fn activate_item(
             .get()
     });
 
+    // 「粘贴后保持打开」开启时窗口不销毁,只归还焦点;焦点无法可靠归还的
+    // 情形(托盘打开、目标已关闭)在投递核心里降级为仅复制
+    let handling =
+        if crate::services::settings_service::load_settings(&app_handle).keep_open_on_paste {
+            crate::services::paste_service::FocusHandling::KeepOpen
+        } else {
+            crate::services::paste_service::FocusHandling::HideFirst
+        };
+
     // 窗口销毁/焦点归还/监听抑制/模拟按键/更新使用时间,全部在共享核心里
     // (与连续粘贴同一条投递路径,行为不会分叉)
     match crate::services::paste_service::deliver_item_by_id(
-        &app_handle, id, true, do_paste, 500,
+        &app_handle, id, handling, do_paste, 500,
     )
     .await?
     {

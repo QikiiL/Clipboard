@@ -219,6 +219,16 @@ export function LayersIcon(props: IconProps) {
   );
 }
 
+/** 窗口面板:「粘贴后保持打开」开关(点击条目后面板不隐藏) */
+export function AppWindowIcon(props: IconProps) {
+  return (
+    <svg {...svgProps(props)}>
+      <rect x="3" y="4.5" width="18" height="15" rx="2" />
+      <path d="M3 9h18" />
+    </svg>
+  );
+}
+
 export function CheckIcon(props: IconProps) {
   return (
     <svg {...svgProps({ strokeWidth: 2.4, ...props })}>
