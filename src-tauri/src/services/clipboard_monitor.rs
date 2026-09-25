@@ -4,6 +4,7 @@ use crate::utils::hash::{compute_hash, compute_hash_bytes};
 use arboard::Clipboard as ArboardClipboard;
 use image::RgbaImage;
 use sqlx::sqlite::SqlitePool;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
@@ -249,8 +250,23 @@ fn save_image_to_disk(
     }
 }
 
+/// 抑制 TTL:正常投递在 set_suppress(true) 后 ≤1s 内显式解除
+/// (单击路径 500ms,队列步进更短);TTL 只是投递卡死时的兜底
+const SUPPRESS_TTL_MS: u64 = 2000;
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 pub struct ClipboardMonitor {
-    suppress: Arc<Mutex<bool>>,
+    /// 投递期间抑制采集的截止时间(毫秒时间戳,0 = 未抑制)。带 TTL:
+    /// 旧实现是无限期 bool,投递链路一旦卡死(剪贴板被其他进程长期占用等),
+    /// 末尾的复位代码永远执行不到,采集从此静默 —— 表现为“软件坏了,
+    /// 必须重启才能恢复记录”。改成截止时间后最多 SUPPRESS_TTL_MS 自愈
+    suppress_until: Arc<AtomicU64>,
     paused: Arc<Mutex<bool>>,
     last_hash: Arc<Mutex<String>>,
 }
@@ -258,15 +274,22 @@ pub struct ClipboardMonitor {
 impl ClipboardMonitor {
     pub fn new() -> Self {
         Self {
-            suppress: Arc::new(Mutex::new(false)),
+            suppress_until: Arc::new(AtomicU64::new(0)),
             paused: Arc::new(Mutex::new(false)),
             last_hash: Arc::new(Mutex::new(String::new())),
         }
     }
 
+    /// true = 抑制采集(TTL 内自动过期兜底),false = 立即解除
     pub async fn set_suppress(&self, value: bool) {
-        let mut suppress = self.suppress.lock().await;
-        *suppress = value;
+        let until = if value { now_ms() + SUPPRESS_TTL_MS } else { 0 };
+        self.suppress_until.store(until, Ordering::SeqCst);
+    }
+
+    /// 投递热点路径(每次轮询、写入前都要查),同步原子读即可
+    pub fn is_suppressed(&self) -> bool {
+        let until = self.suppress_until.load(Ordering::SeqCst);
+        until != 0 && now_ms() < until
     }
 
     pub async fn set_paused(&self, value: bool) {
@@ -316,7 +339,7 @@ impl ClipboardMonitor {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
             loop {
                 interval.tick().await;
-                if *monitor.suppress.lock().await || *monitor.paused.lock().await {
+                if monitor.is_suppressed() || *monitor.paused.lock().await {
                     continue;
                 }
 
@@ -362,7 +385,7 @@ impl ClipboardMonitor {
                 }
 
                 // Skip if suppress/paused changed during blocking read
-                if *monitor.suppress.lock().await || *monitor.paused.lock().await {
+                if monitor.is_suppressed() || *monitor.paused.lock().await {
                     continue;
                 }
 
@@ -447,7 +470,7 @@ impl ClipboardMonitor {
                         .execute(&db)
                         .await;
                         // Double-check suppress wasn't set during our write
-                        if *monitor.suppress.lock().await {
+                        if monitor.is_suppressed() {
                             continue;
                         }
                         let _ = app_handle.emit(
@@ -469,7 +492,7 @@ impl ClipboardMonitor {
 
                         if result.is_ok() {
                             // Double-check suppress wasn't set during our write
-                            if *monitor.suppress.lock().await {
+                            if monitor.is_suppressed() {
                                 continue;
                             }
                             let _ = app_handle
@@ -485,7 +508,7 @@ impl ClipboardMonitor {
 impl Clone for ClipboardMonitor {
     fn clone(&self) -> Self {
         Self {
-            suppress: Arc::clone(&self.suppress),
+            suppress_until: Arc::clone(&self.suppress_until),
             paused: Arc::clone(&self.paused),
             last_hash: Arc::clone(&self.last_hash),
         }

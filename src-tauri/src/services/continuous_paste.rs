@@ -60,10 +60,15 @@ pub struct QueueStatus {
     pub hotkey_registered: bool,
 }
 
+/// 防重入 TTL:单条投递(含焦点归还、写剪贴板、模拟按键、抑制等待)
+/// 正常远小于 1s;超时视为投递线程卡死,允许重新进入 —— 否则一次卡死
+/// 会让整个队列永久无响应,只能重启应用。自动连贴循环每条续期
+const BUSY_TTL_MS: u64 = 8000;
+
 pub struct ContinuousPasteState {
     inner: Mutex<QueueInner>,
-    /// 投递防重入:同一时刻只允许一条在投
-    busy: AtomicBool,
+    /// 投递防重入截止时间(毫秒时间戳,0 = 空闲):同一时刻只允许一条在投
+    busy_until: AtomicU64,
     /// 忙碌期间收到的物理触发计数:当前条目完成后逐条补上,
     /// 快速连按不丢步、也不并发
     pending_steps: AtomicUsize,
@@ -78,7 +83,7 @@ impl ContinuousPasteState {
     pub fn new() -> Self {
         Self {
             inner: Mutex::new(QueueInner::default()),
-            busy: AtomicBool::new(false),
+            busy_until: AtomicU64::new(0),
             pending_steps: AtomicUsize::new(0),
             auto_running: AtomicBool::new(false),
             auto_cancel: AtomicBool::new(false),
@@ -172,6 +177,31 @@ impl ContinuousPasteState {
             .is_ok()
     }
 
+    /// 进入投递(防重入)。false = TTL 内已有投递在进行。
+    /// 截止时间已过(投递线程卡死)时允许接管,队列不会永久卡死
+    fn try_enter_delivery(&self) -> bool {
+        let now = crate::utils::window_manager::now_ms();
+        let current = self.busy_until.load(Ordering::SeqCst);
+        if current != 0 && current > now {
+            return false;
+        }
+        self.busy_until
+            .compare_exchange(current, now + BUSY_TTL_MS, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+    }
+
+    /// 自动连贴循环每投一条续期一次:整轮队列耗时再长也不触发 TTL
+    fn renew_delivery(&self) {
+        self.busy_until.store(
+            crate::utils::window_manager::now_ms() + BUSY_TTL_MS,
+            Ordering::SeqCst,
+        );
+    }
+
+    fn exit_delivery(&self) {
+        self.busy_until.store(0, Ordering::SeqCst);
+    }
+
     pub fn status_snapshot(&self) -> QueueStatus {
         let guard = self.lock();
         QueueStatus {
@@ -218,19 +248,16 @@ pub async fn run_once(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<ContinuousPasteState>();
     // 防重入:已在投递则记待办,当前条目完成后补一步 ——
     // 快速连按每一按都对应一条,不丢、不并发
-    if state
-        .busy
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
+    if !state.try_enter_delivery() {
         state.add_pending_step();
         return Ok(());
     }
     let mut result = run_once_inner(app).await;
     while result.is_ok() && state.take_pending_step() {
+        state.renew_delivery();
         result = run_once_inner(app).await;
     }
-    state.busy.store(false, Ordering::SeqCst);
+    state.exit_delivery();
     result
 }
 

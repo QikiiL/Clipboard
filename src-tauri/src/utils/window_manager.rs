@@ -10,7 +10,7 @@ use crate::services::settings_service::load_settings;
 static CREATING_AT: AtomicU64 = AtomicU64::new(0);
 const CREATE_TIMEOUT_MS: u64 = 30_000;
 
-fn now_ms() -> u64 {
+pub(crate) fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
@@ -27,9 +27,20 @@ pub fn show_or_create(app: &AppHandle) {
         ensure_on_screen(app, &window);
         let _ = window.show();
         let _ = window.set_focus();
+        apply_pinned(app, &window);
         return;
     }
     spawn_create(app);
+}
+
+/// 按设置恢复置顶。置顶只在“创建瞬间”恢复是不够的:快速唤出/销毁交错时
+/// 存在竞态窗口(窗口先被 show 而置顶尚未落上、或投递中销毁重建链路被打断),
+/// 一旦丢失,面板沉到普通层、点击其他窗口就被盖住。每次可见性转换都重申,
+/// 保证不变量「面板可见 ⇒ 按设置置顶」成立(幂等调用,无副作用)。
+pub fn apply_pinned(app: &AppHandle, window: &tauri::WebviewWindow) {
+    if load_settings(app).pinned {
+        let _ = window.set_always_on_top(true);
+    }
 }
 
 /// 自愈:窗口保存的坐标可能已不在任何显示器上(登录早期枚举不全、
@@ -81,10 +92,25 @@ fn spawn_create(app: &AppHandle) {
     }
     let app = app.clone();
     std::thread::spawn(move || {
-        if let Err(e) = create_main_window(&app, true) {
-            eprintln!("Failed to recreate main window: {}", e);
+        // Drop 守卫保证任何路径(含 panic)都复位防重入标志:原先靠函数
+        // 末尾手动 store,创建线程一旦 panic,标志滞留,30 秒内所有唤出被
+        // 静默跳过;若 panic 可复现(个别机器环境相关),热键就“永久失灵”,
+        // 用户只能重启应用
+        struct ResetCreating;
+        impl Drop for ResetCreating {
+            fn drop(&mut self) {
+                CREATING_AT.store(0, Ordering::SeqCst);
+            }
         }
-        CREATING_AT.store(0, Ordering::SeqCst);
+        let _guard = ResetCreating;
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if let Err(e) = create_main_window(&app, true) {
+                eprintln!("Failed to recreate main window: {}", e);
+            }
+        }));
+        if result.is_err() {
+            eprintln!("create_main_window panicked; flag reset, next summon will retry");
+        }
     });
 }
 
@@ -111,6 +137,9 @@ pub fn create_main_window(app: &AppHandle, show_when_ready: bool) -> tauri::Resu
             {
                 let _ = window.show();
                 let _ = window.set_focus();
+                // 置顶在 show 之后重申:创建线程落置顶与页面加载完成之间可能
+                // 隔数百毫秒,快速热键操作可在间隙里插入销毁/重建
+                apply_pinned(window.app_handle(), &window);
                 ensure_focus(window);
             }
         });
@@ -126,9 +155,7 @@ pub fn create_main_window(app: &AppHandle, show_when_ready: bool) -> tauri::Resu
     if state.maximized {
         let _ = window.maximize();
     }
-    if load_settings(app).pinned {
-        let _ = window.set_always_on_top(true);
-    }
+    apply_pinned(app, &window);
 
     // 几何状态由移动/缩放事件实时持久化到独立文件(不进 AppSettings:
     // 前端设置面板即改即存会整体回传设置对象,曾把几何字段清空)
