@@ -9,6 +9,15 @@ extern "system" {
     fn IsWindowVisible(hwnd: isize) -> i32;
     fn IsWindowEnabled(hwnd: isize) -> i32;
     fn GetWindowLongW(hwnd: isize, nindex: i32) -> i32;
+    fn SetWindowPos(
+        hwnd: isize,
+        insert_after: isize,
+        x: i32,
+        y: i32,
+        cx: i32,
+        cy: i32,
+        flags: u32,
+    ) -> i32;
 }
 
 #[link(name = "dwmapi")]
@@ -20,6 +29,24 @@ const GW_HWNDNEXT: u32 = 2;
 const DWMWA_CLOAKED: u32 = 14;
 const GWL_EXSTYLE: i32 = -20;
 const WS_EX_TOPMOST: i32 = 0x0000_0008;
+const SWP_NOSIZE: u32 = 0x0001;
+const SWP_NOMOVE: u32 = 0x0002;
+const SWP_NOACTIVATE: u32 = 0x0010;
+const HWND_TOPMOST: isize = -1;
+
+/// 直接把窗口提到置顶层。必须绕过 tao 的 `set_always_on_top`:它走"账面
+/// 标志差量",账面已是 true 时不会再发任何 Win32 调用 —— 而创建竞态可能
+/// 让那唯一一次 SetWindowPos 静默失败(错误被吞、账面不回滚),之后置顶
+/// 样式缺失却永远补不回来,表现即"面板不悬浮且反复隐藏唤出无法恢复"。
+/// SWP_NOACTIVATE:只改层级,不抢焦点
+pub fn force_topmost(hwnd: isize) -> bool {
+    if hwnd == 0 {
+        return false;
+    }
+    unsafe {
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE) != 0
+    }
+}
 
 /// 捕获当前前台窗口句柄。必须在本应用窗口显示之前调用,
 /// 此刻前台还是目标应用,粘贴按键要发还给这个窗口。
@@ -52,6 +79,11 @@ pub fn restore_target_focus(hwnd: isize) -> bool {
 /// 这里直接用原生 GetForegroundWindow 比对,作为判定兜底。
 pub fn is_foreground_window(hwnd: isize) -> bool {
     hwnd != 0 && unsafe { GetForegroundWindow() } == hwnd
+}
+
+/// 窗口是否带 WS_EX_TOPMOST 扩展样式(置顶守护线程据此发现置顶被外部剥除)
+pub fn is_topmost(hwnd: isize) -> bool {
+    hwnd != 0 && unsafe { GetWindowLongW(hwnd, GWL_EXSTYLE) } & WS_EX_TOPMOST != 0
 }
 
 /// 找出本窗口若被销毁时 Windows 会隐式激活的窗口:Z 序上本窗口下方第一个

@@ -323,6 +323,10 @@ pub fn run() {
                 utils::window_manager::create_main_window(app.handle(), true)?;
             }
 
+            // 置顶守护:面板可见期间持续核对置顶样式,防外部软件剥除(见
+            // window_manager::spawn_topmost_guard)。--minimized 下窗口未建也照常启动
+            utils::window_manager::spawn_topmost_guard(app.handle().clone());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

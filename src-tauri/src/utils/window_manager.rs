@@ -33,14 +33,47 @@ pub fn show_or_create(app: &AppHandle) {
     spawn_create(app);
 }
 
-/// 按设置恢复置顶。置顶只在“创建瞬间”恢复是不够的:快速唤出/销毁交错时
-/// 存在竞态窗口(窗口先被 show 而置顶尚未落上、或投递中销毁重建链路被打断),
-/// 一旦丢失,面板沉到普通层、点击其他窗口就被盖住。每次可见性转换都重申,
-/// 保证不变量「面板可见 ⇒ 按设置置顶」成立(幂等调用,无副作用)。
+/// 按设置恢复置顶。注意不能只调 tao 的 `set_always_on_top`:它走"账面
+/// 标志差量",账面已是 true 时不会再发任何 Win32 调用,而创建竞态可能让
+/// 那唯一一次 SetWindowPos 静默失败(错误被吞、账面不回滚)—— 之后真实
+/// 样式缺失却永远补不回来,表现即"唤出后不悬浮,反复隐藏唤出无法恢复"。
+/// 所以每次都核对窗口真实样式,缺失就直接用 Win32 补上
+/// (见 input_focus::force_topmost / is_topmost)
 pub fn apply_pinned(app: &AppHandle, window: &tauri::WebviewWindow) {
-    if load_settings(app).pinned {
-        let _ = window.set_always_on_top(true);
+    if !load_settings(app).pinned {
+        return;
     }
+    let _ = window.set_always_on_top(true);
+    let hwnd = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
+    if hwnd != 0 && !crate::utils::input_focus::is_topmost(hwnd) {
+        eprintln!("[topmost] style missing at visibility transition — forcing via SetWindowPos");
+        crate::utils::input_focus::force_topmost(hwnd);
+    }
+}
+
+/// 置顶守护:面板可见期间每 500ms 核对 WS_EX_TOPMOST 真实样式,缺失立即
+/// 用 Win32 直补(绕过 tao 账面,见 apply_pinned 注释)。覆盖两类丢失:
+/// 创建竞态让唯一一次置顶调用静默失败,以及外部窗口管理类软件在面板
+/// 使用期间剥除置顶。终端里反复出现的 re-applying 即丢失在持续发生,
+/// 可据此排查那台机器上的相关软件
+pub fn spawn_topmost_guard(app: AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let Some(window) = app.get_webview_window("main") else {
+            continue;
+        };
+        if !window.is_visible().unwrap_or(false) {
+            continue;
+        }
+        if !load_settings(&app).pinned {
+            continue;
+        }
+        let hwnd = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
+        if hwnd != 0 && !crate::utils::input_focus::is_topmost(hwnd) {
+            eprintln!("[topmost] WS_EX_TOPMOST lost while visible — re-applying");
+            crate::utils::input_focus::force_topmost(hwnd);
+        }
+    });
 }
 
 /// 自愈:窗口保存的坐标可能已不在任何显示器上(登录早期枚举不全、
