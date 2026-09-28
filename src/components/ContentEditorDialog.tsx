@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ClipboardItem as ClipboardItemType } from '../types/clipboard';
-import { CopyIcon, XIcon } from './icons';
+import { CopyIcon, XIcon, CheckIcon } from './icons';
 
 /** 查看 / 编辑条目的完整内容。item 为 null 时不渲染;
  *  仅文本类条目由列表的「眼睛」按钮打开(图片条目不提供入口)。 */
@@ -124,7 +124,7 @@ export function ContentEditorDialog({
             onKeyUp={syncSelection}
             onMouseUp={syncSelection}
             onCopy={handleNativeCopy}
-            className="w-full h-[46vh] min-h-[160px] px-3 py-2 rounded-[10px] border border-hairline bg-app text-[13px] leading-relaxed text-ink outline-none resize-none overflow-y-auto focus:border-accent transition-colors"
+            className="w-full h-[46vh] min-h-[160px] px-3 py-2 rounded-[10px] border border-hairline bg-app text-[13px] leading-relaxed text-ink outline-none resize-none overflow-y-auto focus:border-accent focus:ring-[3px] focus:ring-accent-ring transition-[border-color,box-shadow] duration-150"
           />
           {error && <p className="mt-2 text-[11.5px] text-danger">{error}</p>}
         </div>
@@ -132,14 +132,21 @@ export function ContentEditorDialog({
         {/* 底部固定两行(选项一行、按钮一行):窄面板下横向一行会被挤到
             每个字竖排折行(实测 370px 面板溢出),按钮一律 nowrap 防折行 */}
         <div className="px-5 pt-3 pb-4 border-t border-hairline">
-          <label className="flex items-start gap-2 text-[12.5px] text-muted cursor-pointer select-none">
+          <label className="flex items-center gap-2 text-[12.5px] text-muted cursor-pointer select-none w-fit">
             <input
               type="checkbox"
               checked={autoClose}
               onChange={(e) => setAutoClose(e.target.checked)}
-              style={{ accentColor: 'var(--accent)' }}
-              className="mt-px flex-shrink-0"
+              className="sr-only"
             />
+            <span
+              aria-hidden="true"
+              className={`flex items-center justify-center w-[15px] h-[15px] rounded-[4px] border transition-colors duration-150 ${
+                autoClose ? 'bg-accent border-accent text-on-accent' : 'border-hairline text-transparent'
+              }`}
+            >
+              <CheckIcon size={11} />
+            </span>
             复制选中后自动关闭此窗口
           </label>
           <div className="flex items-center justify-end gap-2 mt-3">
@@ -164,10 +171,10 @@ export function ContentEditorDialog({
             <button
               onClick={() => void handleSave()}
               disabled={saving}
-              className={`h-[31px] px-5 text-[12.5px] whitespace-nowrap rounded-[10px] font-medium transition-colors duration-150 ${
+              className={`h-[31px] px-5 text-[12.5px] whitespace-nowrap rounded-[10px] font-semibold border transition-colors duration-150 ${
                 saving
-                  ? 'bg-accent-soft text-faint cursor-not-allowed'
-                  : 'bg-accent text-on-accent hover:bg-accent-deep'
+                  ? 'bg-accent-soft text-faint border-transparent cursor-not-allowed'
+                  : 'bg-accent-soft text-accent border-accent-ring hover:bg-accent hover:text-on-accent'
               }`}
             >
               保存

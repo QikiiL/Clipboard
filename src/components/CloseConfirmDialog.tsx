@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { XIcon } from './icons';
+import { XIcon, CheckIcon } from './icons';
 
 interface Props {
   isOpen: boolean;
@@ -39,35 +39,42 @@ export function CloseConfirmDialog({ isOpen, onChoice, onClose }: Props) {
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 space-y-4">
-          <p className="text-[13px] text-ink">
-            您希望如何处理窗口?
-          </p>
+        <div className="px-5 py-4">
+          <p className="text-[13px] text-ink">您希望如何处理窗口？</p>
 
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="mt-4 flex items-center gap-2 cursor-pointer select-none w-fit">
             <input
               type="checkbox"
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
-              className="w-3.5 h-3.5 rounded-sm accent-accent"
+              className="sr-only"
             />
-            <span className="text-[13px] text-ink">
-              记住我的选择
+            <span
+              aria-hidden="true"
+              className={`flex items-center justify-center w-[15px] h-[15px] rounded-[4px] border transition-colors duration-150 ${
+                remember ? 'bg-accent border-accent text-on-accent' : 'border-hairline text-transparent'
+              }`}
+            >
+              <CheckIcon size={11} />
             </span>
+            <span className="text-[13px] text-ink">记住我的选择</span>
           </label>
+          <p className="mt-1.5 pl-[23px] text-[11px] text-faint">
+            勾选后不再询问，可在设置的「关闭行为」里随时改回
+          </p>
         </div>
 
         {/* Footer */}
         <div className="flex justify-end gap-2 px-5 pt-3 pb-4 border-t border-hairline">
           <button
             onClick={() => onChoice('close', remember)}
-            className="h-[31px] px-4 text-[12.5px] rounded-[10px] bg-danger text-on-accent hover:bg-danger-deep transition-colors duration-150"
+            className="h-[31px] px-4 text-[12.5px] rounded-[10px] text-danger hover:bg-danger/10 transition-colors duration-150"
           >
             关闭应用
           </button>
           <button
             onClick={() => onChoice('minimize', remember)}
-            className="h-[31px] px-4 text-[12.5px] rounded-[10px] shadow-lift bg-accent text-on-accent font-medium hover:bg-accent-deep transition-colors duration-150"
+            className="h-[31px] px-4 text-[12.5px] rounded-[10px] bg-accent-soft text-accent font-semibold border border-accent-ring hover:bg-accent hover:text-on-accent transition-colors duration-150"
           >
             最小化到托盘
           </button>

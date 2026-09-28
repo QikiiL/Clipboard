@@ -1,16 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useClipboardStore } from '../stores/clipboardStore';
 import { useContinuousPasteStore } from '../stores/continuousPasteStore';
 import { ClipboardItemCard } from './ClipboardItem';
 import { ContentEditorDialog } from './ContentEditorDialog';
-import { ClipboardIcon } from './icons';
+import { ClipboardIcon, SearchIcon, StarOutlineIcon, FolderIcon } from './icons';
+import { ghostBtn } from './settings-controls';
 import { invoke } from '@tauri-apps/api/core';
 import type { ClipboardItem as ClipboardItemType } from '../types/clipboard';
 import { useRubberBandSelect } from '../hooks/useRubberBandSelect';
 
 export function ClipboardList() {
   const { items, isLoading } = useClipboardStore();
+  // 空状态分场景文案需要的过滤条件(仅在 items 为空时参与渲染)
+  const searchQuery = useClipboardStore((s) => s.searchQuery);
+  const showFavorites = useClipboardStore((s) => s.showFavorites);
+  const selectedGroup = useClipboardStore((s) => s.selectedGroup);
   const scrollRef = useRef<HTMLDivElement>(null);
   // 正在编辑的条目:null 即不展示弹窗。弹窗必须挂在滚动容器之外渲染,
   // 否则会被滚动容器裁剪、且随虚拟列表的卸载而消失
@@ -93,11 +98,50 @@ export function ClipboardList() {
   }
 
   if (items.length === 0) {
+    // 空状态分场景:搜索无结果 / 收藏为空 / 空分组 / 真·无记录。
+    // 统一文案会让用户以为"没记录成功",搜索场景还要给「清空搜索」的出口
+    const empty: { icon: ReactNode; title: ReactNode; desc: string; action?: ReactNode } =
+      searchQuery
+        ? {
+            icon: <SearchIcon size={26} />,
+            title: (
+              <>
+                没有匹配「<span className="text-muted">{searchQuery}</span>」的记录
+              </>
+            ),
+            desc: '换个关键词试试',
+            action: (
+              <button
+                onClick={() => useClipboardStore.getState().setSearchQuery('')}
+                className={`${ghostBtn} mt-3 h-[30px] px-4 text-[12px]`}
+              >
+                清空搜索
+              </button>
+            ),
+          }
+        : showFavorites
+          ? {
+              icon: <StarOutlineIcon size={26} />,
+              title: '还没有收藏',
+              desc: '点条目上的 ☆ 把常用内容收进来',
+            }
+          : selectedGroup
+            ? {
+                icon: <FolderIcon size={26} />,
+                title: '这个分组还是空的',
+                desc: '点条目上的文件夹图标把内容归进来',
+              }
+            : {
+                icon: <ClipboardIcon size={28} />,
+                title: '暂无剪贴板记录',
+                desc: '复制内容后将自动出现在这里',
+              };
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-faint">
-        <ClipboardIcon size={28} />
-        <p className="mt-3 text-[13px]">暂无剪贴板记录</p>
-        <p className="mt-1 text-[12px]">复制内容后将自动出现在这里</p>
+      <div className="flex-1 flex flex-col items-center justify-center text-faint px-6">
+        {empty.icon}
+        <p className="mt-3 text-[13px] text-center break-all max-w-[300px]">{empty.title}</p>
+        <p className="mt-1 text-[12px] text-center">{empty.desc}</p>
+        {empty.action}
       </div>
     );
   }

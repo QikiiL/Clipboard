@@ -149,34 +149,44 @@ export function StatusBar() {
       {/* 左:统计。文本不换行(nowrap),容器 min-w-0+overflow-hidden
           允许窗口极窄时被裁剪。dbSize/appVersion 是次要信息,窄屏隐藏。
           右:粘贴模式+状态。flex-shrink-0 防止按钮被压成两行 */}
-      <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
-        <span className="whitespace-nowrap">共 {totalCount} 条</span>
+      <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
+        <span className="whitespace-nowrap">{totalCount} 条</span>
+        <span aria-hidden="true" className="opacity-40 select-none">·</span>
         <span className="whitespace-nowrap">{favoriteCount} 收藏</span>
         {dbSize !== null && (
-          <span className="hidden @min-wide:inline whitespace-nowrap">{formatBytes(dbSize)}</span>
+          <>
+            <span aria-hidden="true" className="hidden @min-wide:inline opacity-40 select-none">·</span>
+            <span className="hidden @min-wide:inline whitespace-nowrap">{formatBytes(dbSize)}</span>
+          </>
         )}
         {appVersion && (
           // flex-shrink-0 保证版本号永远不被裁剪;不写 hidden md:inline
           // 让它在任何宽度下都可见(版本号是短文本,不会显著挤占空间,
           // 而且测试/调试时需要明确知道当前跑的是哪个版本)
-          <span className="whitespace-nowrap flex-shrink-0">v{appVersion}</span>
+          <>
+            <span aria-hidden="true" className="opacity-40 select-none">·</span>
+            <span className="whitespace-nowrap flex-shrink-0">v{appVersion}</span>
+          </>
         )}
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
         <button
           onClick={handleTogglePasteMode}
           title="切换单击条目的行为(粘贴到之前点击的输入框 / 仅复制到剪贴板)"
-          className={`flex items-center gap-1.5 px-[11px] py-[3px] rounded-full transition-[background-color,color,box-shadow] duration-150 whitespace-nowrap @max-narrow:px-2 @max-narrow:py-[2px] ${
+          className={`flex items-center gap-1.5 px-[11px] py-[3px] rounded-full border transition-[background-color,color,border-color] duration-150 whitespace-nowrap @max-narrow:px-2 @max-narrow:py-[2px] ${
             pasteMode
-              ? 'bg-accent-soft text-accent font-semibold ring-1 ring-inset ring-accent-ring'
-              : 'bg-surface shadow-lift text-muted hover:shadow-lift-hover'
+              ? 'bg-accent-soft text-accent font-semibold border-accent-ring'
+              : 'bg-transparent border-hairline text-muted hover:bg-app hover:text-ink'
           }`}
         >
           {pasteMode && <ArrowUpIcon size={11} />}
           {pasteMode ? '单击粘贴' : '单击复制'}
         </button>
         <div className="flex items-center gap-1.5 whitespace-nowrap">
-          <span className={`w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-warn' : 'bg-ok'}`} title={isPaused ? '已暂停' : '监听中'} />
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${isPaused ? 'bg-warn' : 'bg-ok motion-safe:animate-pulse'}`}
+            title={isPaused ? '已暂停' : '监听中'}
+          />
           <span>{isPaused ? '已暂停' : '监听中'}</span>
         </div>
       </div>

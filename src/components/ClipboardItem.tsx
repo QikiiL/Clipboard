@@ -288,8 +288,8 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
 
   return (
     <div
-      className={`group relative flex items-center gap-2.5 min-h-[52px] p-[10px] rounded-[10px] cursor-pointer transition-[background-color,box-shadow] duration-150 hover:bg-surface hover:shadow-lift @max-narrow:gap-2 @max-narrow:min-h-[46px] @max-narrow:p-2 @min-wide:gap-3 @min-wide:min-h-[60px] @min-wide:p-3 ${
-        boxSelected ? 'ring-2 ring-accent bg-accent-soft/50 shadow-lift' : ''
+      className={`group relative flex items-center gap-2.5 min-h-[52px] p-[10px] rounded-[10px] cursor-pointer border border-transparent transition-[background-color,border-color] duration-150 hover:bg-surface hover:border-hairline @max-narrow:gap-2 @max-narrow:min-h-[46px] @max-narrow:p-2 @min-wide:gap-3 @min-wide:min-h-[60px] @min-wide:p-3 ${
+        boxSelected ? 'ring-2 ring-accent bg-accent-soft/50' : ''
       } ${boxMode && boxUsed ? 'opacity-50' : ''}`}
       onClick={(e) => {
         if (boxMode) {
@@ -306,10 +306,10 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
       }}
     >
       {!(isImage && imageSrc && !imageFailed) && (
-        <div className="flex-shrink-0 mt-px text-faint">
+        <div className="flex-shrink-0 flex items-center justify-center w-[26px] text-faint">
           {(() => {
             const TypeIcon = typeIcons[item.type];
-            return <TypeIcon size={15} />;
+            return <TypeIcon size={14} />;
           })()}
         </div>
       )}

@@ -7,11 +7,18 @@ export function SearchBar() {
   const [inputValue, setInputValue] = useState('');
   const debouncedQuery = useDebounce(inputValue, 300);
   const setSearchQuery = useClipboardStore((s) => s.setSearchQuery);
+  const storeQuery = useClipboardStore((s) => s.searchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setSearchQuery(debouncedQuery);
   }, [debouncedQuery, setSearchQuery]);
+
+  // 反向同步:store 被外部清空(空状态的「清空搜索」按钮)时输入框跟着清,
+  // 否则列表已恢复全部、输入框里却还留着旧关键词
+  useEffect(() => {
+    if (storeQuery === '') setInputValue('');
+  }, [storeQuery]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -33,7 +40,7 @@ export function SearchBar() {
 
   return (
     <div className="px-4 pt-3 pb-2.5 @max-narrow:px-2.5 @max-narrow:pt-2 @max-narrow:pb-2 @min-wide:px-5 @min-wide:pt-3.5 @min-wide:pb-3">
-      <div className="flex items-center gap-2 h-9 rounded-xl bg-surface shadow-lift px-3 text-faint focus-within:outline-2 focus-within:outline-accent-soft @max-narrow:h-8 @max-narrow:px-2.5 @min-wide:h-10 @min-wide:px-3.5">
+      <div className="flex items-center gap-2 h-9 rounded-[10px] bg-surface border border-hairline px-3 text-faint transition-[border-color,box-shadow] duration-150 focus-within:border-accent focus-within:ring-[3px] focus-within:ring-accent-ring @max-narrow:h-8 @max-narrow:px-2.5 @min-wide:h-10 @min-wide:px-3.5">
         <SearchIcon size={14} />
         <input
           ref={inputRef}

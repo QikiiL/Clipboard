@@ -1,13 +1,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { useTheme } from '../contexts/ThemeContext';
 import { useClipboardStore } from '../stores/clipboardStore';
 import type { AppSettings } from '../types/settings';
 import { DEFAULT_SETTINGS } from '../types/settings';
-import { XIcon } from './icons';
+import { XIcon, ResetIcon } from './icons';
 import { PromptDialog } from './Dialogs';
 import { parseUpdateNotes, type UpdateInfo } from './UpdateDialog';
 import { openUrl } from '../lib/openUrl';
+import {
+  Switch,
+  Stepper,
+  Keycaps,
+  SectionLabel,
+  Card,
+  Row,
+  ghostBtn,
+  ghostBtnDanger,
+  ghostBtnIcon,
+} from './settings-controls';
 
 interface Props {
   isOpen: boolean;
@@ -64,6 +76,8 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   const [addingPattern, setAddingPattern] = useState(false);
   // 短信验证码功能状态(权限/最近捕获),来自后端轮询
   const [smsStatus, setSmsStatus] = useState<SmsCodeStatus | null>(null);
+  // 标题右侧版本徽章
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   // settingsRef 始终持有最新设置,避免回调闭包读到旧值
   const settingsRef = useRef<AppSettings>(DEFAULT_SETTINGS);
   // savedRef 持有最近一次已持久化的值,用于判断数字输入是否真的改了
@@ -98,6 +112,9 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
       invoke<StorageInfo>('get_storage_info')
         .then(setStorageInfo)
         .catch(console.error);
+      getVersion()
+        .then(setAppVersion)
+        .catch(() => {});
     }
   }, [isOpen, setPaused, applySettings]);
 
@@ -384,15 +401,6 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
     }
   };
 
-  const displayShortcut =
-    recording === 'hotkey'
-      ? '请按下快捷键…'
-      : `${settings.hotkey_modifier}+${settings.hotkey_key}`;
-  const displaySeqShortcut =
-    recording === 'seq_paste'
-      ? '请按下快捷键…'
-      : `${settings.seq_paste_modifier}+${settings.seq_paste_key}`;
-
   // 渲染时只解析一次(此前在 JSX 里调用了两遍)
   const updateNoteLines = updateResult ? parseUpdateNotes(updateResult.notes) : [];
 
@@ -401,8 +409,15 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-md mx-4 max-h-[90vh] flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between gap-3 px-5 pt-3.5 pb-3 border-b border-hairline">
-          <h2 className="text-sm font-semibold">设置</h2>
+        <div className="flex items-center justify-between px-[18px] pt-[15px] pb-[13px]">
+          <h2 className="text-[14.5px] font-semibold tracking-[0.01em]">
+            设置
+            {appVersion && (
+              <span className="ml-2 px-2 py-[2px] rounded-full border border-hairline text-[10.5px] font-normal text-faint align-[1px]">
+                v{appVersion}
+              </span>
+            )}
+          </h2>
           <button
             onClick={onClose}
             className="flex items-center justify-center w-[26px] h-[26px] rounded-lg text-faint hover:bg-app hover:text-muted transition-colors"
@@ -411,259 +426,175 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
           </button>
         </div>
 
-        <div className="px-5 py-2 space-y-4 overflow-y-auto">
-          {/* 主题 */}
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[12.5px] font-medium">深色模式</span>
-            <button
-              onClick={toggleTheme}
-              role="switch"
-              aria-checked={theme === 'dark'}
-              aria-label="深色模式"
-              className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 ${
-                theme === 'dark' ? 'bg-accent' : 'bg-hairline'
-              }`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${
-                theme === 'dark' ? 'translate-x-[15px]' : ''
-              }`} />
-            </button>
-          </div>
+        <div className="px-4 pb-1 overflow-y-auto">
+          {/* 外观 */}
+          <SectionLabel>外观</SectionLabel>
+          <Card>
+            <Row title="深色模式">
+              <Switch checked={theme === 'dark'} onChange={toggleTheme} label="深色模式" />
+            </Row>
+          </Card>
 
-          {/* 保留天数 */}
-          <div>
-            <label className="text-[12.5px] font-medium">历史保留天数</label>
-            <p className="text-[11px] text-faint mb-1">0 表示永久保留</p>
-            <input
-              type="number"
-              value={settings.retention_days}
-              onChange={(e) => applySettings({ ...settingsRef.current, retention_days: Math.max(0, Number(e.target.value) || 0) })}
-              onBlur={persistNumbersIfChanged}
-              className="w-[88px] h-[29px] px-2.5 text-center rounded-[9px] border border-hairline bg-transparent text-[12.5px] tabular-nums"
-              min={0}
-            />
-          </div>
-
-          {/* 最大条数 */}
-          <div>
-            <label className="text-[12.5px] font-medium">最大存储条数</label>
-            <p className="text-[11px] text-faint mb-1">0 表示无限制</p>
-            <input
-              type="number"
-              value={settings.max_item_count}
-              onChange={(e) => applySettings({ ...settingsRef.current, max_item_count: Math.max(0, Number(e.target.value) || 0) })}
-              onBlur={persistNumbersIfChanged}
-              className="w-[88px] h-[29px] px-2.5 text-center rounded-[9px] border border-hairline bg-transparent text-[12.5px] tabular-nums"
-              min={0}
-            />
-          </div>
-
-          {/* 热键 */}
-          <div>
-            <label className="text-[12.5px] font-medium">全局热键</label>
-            <p className="text-[11px] text-faint mb-1">唤出窗口的快捷键</p>
-            <div className="flex gap-2 items-center">
-              <div
-                onClick={winVEnabled ? undefined : startRecording}
-                className={`flex-1 h-[30px] rounded-[9px] text-center font-mono text-xs select-none transition-[background-color,border-color,color] duration-150 ${
-                  winVEnabled
-                    ? 'border border-hairline bg-app text-faint cursor-not-allowed'
-                    : recording === 'hotkey'
-                      ? 'border border-accent bg-accent-soft text-accent animate-pulse cursor-pointer'
-                      : 'border border-hairline bg-app text-muted hover:border-accent cursor-pointer'
-                } flex items-center justify-center`}
-              >
-                {winVEnabled ? '已停用(Win+V 模式)' : displayShortcut}
-              </div>
-              <button
-                onClick={winVEnabled ? undefined : resetHotkey}
-                title="恢复默认快捷键"
-                className={`h-[30px] px-3 text-[11px] rounded-[9px] border border-hairline transition-colors duration-150 ${
-                  winVEnabled
-                    ? 'bg-app text-faint cursor-not-allowed'
-                    : 'bg-app text-muted hover:bg-hairline'
-                }`}
-              >
-                重置
-              </button>
-            </div>
-            <p className="text-[11px] text-faint mt-1">
-              {recording === 'hotkey' ? '按下想要的快捷键组合…' : '点击上方区域录制新快捷键,录制完成即生效'}
-            </p>
-          </div>
-
-          {/* 连续粘贴热键 */}
-          <div>
-            <label className="text-[12.5px] font-medium">连续粘贴热键</label>
-            <p className="text-[11px] text-faint mb-1">
-              连续粘贴时,每按一次粘贴队列中的下一条(仅队列进行期间占用)
-            </p>
-            <div className="flex gap-2 items-center">
-              <div
-                onClick={startRecordingSeq}
-                className={`flex-1 h-[30px] rounded-[9px] text-center font-mono text-xs select-none transition-[background-color,border-color,color] duration-150 flex items-center justify-center ${
-                  recording === 'seq_paste'
-                    ? 'border border-accent bg-accent-soft text-accent animate-pulse cursor-pointer'
-                    : 'border border-hairline bg-app text-muted hover:border-accent cursor-pointer'
-                }`}
-              >
-                {displaySeqShortcut}
-              </div>
-              <button
-                onClick={resetSeqHotkey}
-                title="恢复默认快捷键"
-                className="h-[30px] px-3 text-[11px] rounded-[9px] border border-hairline bg-app text-muted hover:bg-hairline transition-colors duration-150"
-              >
-                重置
-              </button>
-            </div>
-            <p className="text-[11px] text-faint mt-1">
-              {recording === 'seq_paste' ? '按下想要的快捷键组合…' : '不能与唤出窗口的全局热键相同'}
-            </p>
-          </div>
-
-          {/* Win+V 替代系统剪贴板 */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <span className="text-[12.5px] font-medium">替代系统 Win+V</span>
-              <p className="text-[11px] text-faint">禁用系统剪贴板历史,使用本应用替代</p>
-            </div>
-            <button
-              onClick={handleToggleWinV}
-              role="switch"
-              aria-checked={winVEnabled}
-              aria-label="Win+V 替代系统剪贴板"
-              className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 flex-shrink-0 ${
-                winVEnabled ? 'bg-accent' : 'bg-hairline'
-              }`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${
-                winVEnabled ? 'translate-x-[15px]' : ''
-              }`} />
-            </button>
-          </div>
-          {winVEnabled && (
-            <p className="text-[11px] text-warn-text">
-              当前已启用 Win+V,自定义快捷键暂时停用。
-            </p>
-          )}
-
-          {/* 开机自启 */}
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[12.5px] font-medium">开机自启动</span>
-            <button
-              onClick={handleToggleAutostart}
-              role="switch"
-              aria-checked={settings.start_with_windows}
-              aria-label="开机自启动"
-              className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 ${
-                settings.start_with_windows ? 'bg-accent' : 'bg-hairline'
-              }`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${
-                settings.start_with_windows ? 'translate-x-[15px]' : ''
-              }`} />
-            </button>
-          </div>
-
-          {/* 暂停监听 */}
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[12.5px] font-medium">暂停监听</span>
-            <button
-              onClick={handleTogglePaused}
-              role="switch"
-              aria-checked={settings.paused}
-              aria-label="暂停监听"
-              className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 ${
-                settings.paused ? 'bg-accent' : 'bg-hairline'
-              }`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${
-                settings.paused ? 'translate-x-[15px]' : ''
-              }`} />
-            </button>
-          </div>
-
-          {/* 数据存储位置 */}
-          <div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[12.5px] font-medium">数据存储位置</span>
-              <div className="flex gap-2 flex-shrink-0">
-                {storageInfo && !storageInfo.is_default && (
+          {/* 通用 */}
+          <SectionLabel>通用</SectionLabel>
+          <Card>
+            <Row title="开机自启动">
+              <Switch
+                checked={settings.start_with_windows}
+                onChange={handleToggleAutostart}
+                label="开机自启动"
+              />
+            </Row>
+            <Row title="暂停监听" desc="开启后复制的内容不再记录">
+              <Switch checked={settings.paused} onChange={handleTogglePaused} label="暂停监听" />
+            </Row>
+            <Row title="历史保留天数" desc="0 表示永久保留">
+              <Stepper
+                value={settings.retention_days}
+                ariaLabel="历史保留天数"
+                onChange={(n) => applySettings({ ...settingsRef.current, retention_days: n })}
+                onCommit={persistNumbersIfChanged}
+              />
+            </Row>
+            <Row title="最大存储条数" desc="0 表示无限制">
+              <Stepper
+                value={settings.max_item_count}
+                ariaLabel="最大存储条数"
+                onChange={(n) => applySettings({ ...settingsRef.current, max_item_count: n })}
+                onCommit={persistNumbersIfChanged}
+              />
+            </Row>
+            <div className="px-3.5 py-[11px]">
+              <div className="text-[12.5px] font-medium">关闭行为</div>
+              <div className="flex mt-2 gap-[3px] p-[3px] rounded-[10px] bg-app">
+                {([
+                  { value: 'ask', label: '询问' },
+                  { value: 'minimize', label: '最小化到托盘' },
+                  { value: 'close', label: '直接关闭' },
+                ] as const).map((opt) => (
                   <button
-                    onClick={handleResetStorage}
-                    className="h-[30px] px-3 text-[11px] rounded-[9px] border border-hairline bg-app text-muted hover:bg-hairline transition-colors duration-150"
+                    key={opt.value}
+                    onClick={() => setCloseBehavior(opt.value)}
+                    className={`flex-1 h-[26px] text-[11.5px] rounded-[7px] transition-[background-color,color,box-shadow] duration-150 ${
+                      settings.close_behavior === opt.value
+                        ? 'bg-surface text-accent font-semibold shadow-lift'
+                        : 'text-muted hover:text-faint'
+                    }`}
                   >
-                    恢复默认
+                    {opt.label}
                   </button>
-                )}
-                <button
-                  onClick={handleChangeStorage}
-                  className="h-[30px] px-3 text-[11px] rounded-[9px] border border-hairline bg-app text-muted hover:bg-hairline transition-colors duration-150"
-                >
-                  更改位置
-                </button>
+                ))}
               </div>
             </div>
-            <p className="text-[11px] text-faint mt-1 break-all">
-              {storageInfo ? storageInfo.data_dir : '加载中…'}
-            </p>
-            <p className="text-[11px] text-faint mt-1">
-              数据库与图片保存在此目录,迁移在重启后进行且失败自动回退
-            </p>
-          </div>
+          </Card>
 
-          {/* 排除规则 — 卡片区块,内部四个子项用细线分隔 */}
-          <div className="border border-hairline rounded-[12px] bg-app px-3.5 py-3">
-            <span className="text-[12.5px] font-medium">排除规则</span>
-            <p className="text-[11px] text-faint mt-0.5">
-              符合下面任一条件的内容都不会记录。密码管理器已默认加入
-            </p>
-
-            {/* 1. 内置敏感识别 */}
-            <div className="mt-3 pt-3 border-t border-hairline">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[12px] text-ink">自动识别密钥 / 卡号</span>
+          {/* 快捷键 */}
+          <SectionLabel>快捷键</SectionLabel>
+          <Card>
+            <Row
+              title="唤出窗口"
+              desc={
+                winVEnabled
+                  ? '已停用（Win+V 模式）'
+                  : recording === 'hotkey'
+                    ? '按下想要的快捷键组合…'
+                    : '点击键帽重新录制，录制完成即生效'
+              }
+            >
+              <div className="flex items-center gap-1.5">
+                <Keycaps
+                  modifier={settings.hotkey_modifier}
+                  keyName={settings.hotkey_key}
+                  recording={recording === 'hotkey'}
+                  disabled={winVEnabled}
+                  onClick={startRecording}
+                />
                 <button
-                  onClick={() =>
-                    void saveNow({
-                      ...settingsRef.current,
-                      detect_sensitive: !settingsRef.current.detect_sensitive,
-                    })
-                  }
-                  role="switch"
-                  aria-checked={settings.detect_sensitive}
-                  aria-label="自动识别密钥与卡号"
-                  className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 ${
-                    settings.detect_sensitive ? 'bg-accent' : 'bg-hairline'
-                  }`}
+                  onClick={resetHotkey}
+                  disabled={winVEnabled}
+                  title="恢复默认快捷键"
+                  className={ghostBtnIcon}
                 >
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${
-                    settings.detect_sensitive ? 'translate-x-[15px]' : ''
-                  }`} />
+                  <ResetIcon size={13} />
                 </button>
               </div>
-              <p className="text-[11px] text-faint mt-1">
-                能认出常见的密钥、令牌、信用卡号和身份证号，认出来就不记录。偶尔会看走眼，万一误伤了，在窗口底部的提示条上点「仍要记录」就能找回来
-              </p>
-            </div>
+            </Row>
+            <Row
+              title="连续粘贴"
+              desc={
+                recording === 'seq_paste'
+                  ? '按下想要的快捷键组合…'
+                  : '队列进行中按一次贴一条，不能与唤出热键相同'
+              }
+            >
+              <div className="flex items-center gap-1.5">
+                <Keycaps
+                  modifier={settings.seq_paste_modifier}
+                  keyName={settings.seq_paste_key}
+                  recording={recording === 'seq_paste'}
+                  onClick={startRecordingSeq}
+                />
+                <button onClick={resetSeqHotkey} title="恢复默认快捷键" className={ghostBtnIcon}>
+                  <ResetIcon size={13} />
+                </button>
+              </div>
+            </Row>
+            <Row
+              title="替代系统 Win+V"
+              desc={
+                winVEnabled ? (
+                  <span className="text-warn-text">已启用 Win+V，自定义唤出热键暂时停用</span>
+                ) : (
+                  '禁用系统剪贴板历史，用本应用替代'
+                )
+              }
+            >
+              <Switch
+                checked={winVEnabled}
+                onChange={() => void handleToggleWinV()}
+                label="Win+V 替代系统剪贴板"
+              />
+            </Row>
+          </Card>
 
-            {/* 2. 来源进程黑名单 */}
-            <div className="mt-3 pt-3 border-t border-hairline">
+          {/* 隐私 */}
+          <SectionLabel>隐私</SectionLabel>
+          <Card>
+            <Row
+              title="自动识别密钥 / 卡号"
+              desc="命中即不记录；误伤可在底部提示条点「仍要记录」找回"
+            >
+              <Switch
+                checked={settings.detect_sensitive}
+                onChange={() =>
+                  void saveNow({
+                    ...settingsRef.current,
+                    detect_sensitive: !settingsRef.current.detect_sensitive,
+                  })
+                }
+                label="自动识别密钥与卡号"
+              />
+            </Row>
+
+            {/* 来源软件 */}
+            <div className="px-3.5 py-[11px]">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-[12px] text-ink">来源软件</span>
-                <button
-                  onClick={() => setAddingApp(true)}
-                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-surface text-muted hover:bg-hairline transition-colors duration-150"
-                >
+                <div className="text-[12.5px] font-medium">来源软件</div>
+                <button onClick={() => setAddingApp(true)} className={ghostBtn}>
                   添加
                 </button>
               </div>
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
+              <p
+                className="mt-[2px] text-[11px] text-faint"
+                title="填软件的文件名，例如 keepass.exe。注意：如果复制完立刻把这个软件关了，就认不出是哪个软件，这条规则会失效"
+              >
+                从这些软件复制的内容一律不记录
+              </p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
                 {settings.excluded_apps.map((app) => (
                   <span
                     key={app}
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] rounded-md bg-surface border border-hairline text-muted"
+                    className="flex items-center gap-1 pl-2.5 pr-1.5 py-[3px] text-[11px] rounded-full bg-app border border-hairline text-muted"
                   >
                     <span className="font-mono">{app}</span>
                     <button
@@ -673,7 +604,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                           excluded_apps: settings.excluded_apps.filter((a) => a !== app),
                         })
                       }
-                      className="text-faint hover:text-danger transition-colors"
+                      className="flex items-center text-faint hover:text-danger transition-colors"
                       title="移除"
                     >
                       <XIcon size={11} />
@@ -684,28 +615,27 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                   <p className="text-[11px] text-faint">还没添加，所有软件复制的内容都会记录</p>
                 )}
               </div>
-              <p className="text-[11px] text-faint mt-1">
-                填软件的文件名，例如 keepass.exe。从这个软件复制的内容一律不记录。
-                注意：如果复制完立刻把这个软件关了，就认不出是哪个软件了，这条规则会失效
-              </p>
             </div>
 
-            {/* 3. 自定义正则 */}
-            <div className="mt-3 pt-3 border-t border-hairline">
+            {/* 内容匹配规则 */}
+            <div className="px-3.5 py-[11px]">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-[12px] text-ink">内容匹配规则</span>
-                <button
-                  onClick={() => setAddingPattern(true)}
-                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-surface text-muted hover:bg-hairline transition-colors duration-150"
-                >
+                <div className="text-[12.5px] font-medium">内容匹配规则</div>
+                <button onClick={() => setAddingPattern(true)} className={ghostBtn}>
                   添加
                 </button>
               </div>
-              <div className="mt-1.5 space-y-1">
+              <p
+                className="mt-[2px] text-[11px] text-faint"
+                title="可以直接写字（如：内部机密），也可以写带格式的规则（如：订单号[0-9]+ 表示「订单号」后面跟一串数字）。填错了不会报错，只会跳过这一条"
+              >
+                内容里出现设定文字就不记录，支持正则
+              </p>
+              <div className="mt-2 space-y-1">
                 {settings.excluded_patterns.map((pattern) => (
                   <div
                     key={pattern}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface border border-hairline"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-app border border-hairline"
                   >
                     <span className="flex-1 min-w-0 text-[11px] font-mono text-muted truncate" title={pattern}>
                       {pattern}
@@ -717,7 +647,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                           excluded_patterns: settings.excluded_patterns.filter((p) => p !== pattern),
                         })
                       }
-                      className="flex-shrink-0 text-faint hover:text-danger transition-colors"
+                      className="flex-shrink-0 flex items-center text-faint hover:text-danger transition-colors"
                       title="移除"
                     >
                       <XIcon size={11} />
@@ -728,81 +658,66 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                   <p className="text-[11px] text-faint">还没添加。可以填一段文字，如：内部机密</p>
                 )}
               </div>
-              <p className="text-[11px] text-faint mt-1">
-                复制的内容里只要出现你设定的文字就不记录。可以直接写字（如：内部机密），也可以写带格式的规则（如：订单号[0-9]+ 表示「订单号」后面跟一串数字）。填错了不会报错，只会跳过这一条
-              </p>
             </div>
 
-            {/* 4. 豁免名单 */}
-            <div className="mt-3 pt-3 border-t border-hairline">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[12px] text-ink">豁免名单</span>
-                <button
-                  onClick={() =>
-                    void saveNow({ ...settingsRef.current, excluded_allowlist: [] })
-                  }
-                  disabled={allowlistCount === 0}
-                  className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-surface text-muted hover:bg-hairline transition-colors duration-150 disabled:opacity-40 disabled:hover:bg-surface disabled:cursor-not-allowed"
-                >
-                  清空
-                </button>
-              </div>
-              <p className="text-[11px] text-faint mt-1">
-                {allowlistCount === 0
-                  ? '还没有豁免的内容。点过「仍要记录」的内容会出现在这里'
-                  : `已豁免 ${allowlistCount} 条，这些内容以后都会正常记录，不再拦截`}
-              </p>
-            </div>
-          </div>
+            <Row
+              title="豁免名单"
+              desc={
+                allowlistCount === 0
+                  ? '点过「仍要记录」的内容会出现在这里'
+                  : `已豁免 ${allowlistCount} 条，以后正常记录不再拦截`
+              }
+            >
+              <button
+                onClick={() => void saveNow({ ...settingsRef.current, excluded_allowlist: [] })}
+                disabled={allowlistCount === 0}
+                className={ghostBtn}
+              >
+                清空
+              </button>
+            </Row>
 
-          {/* 短信验证码 — 卡片区块 */}
-          <div className="border border-hairline rounded-[12px] bg-app px-3.5 py-3">
-            <span className="text-[12.5px] font-medium">短信验证码</span>
-            <p className="text-[11px] text-faint mt-0.5">
-              手机收到带验证码的短信时，自动把验证码复制到剪贴板，直接粘贴就能用。需要先在电脑的「手机连接」里配对手机
-            </p>
-
-            <div className="mt-3 pt-3 border-t border-hairline">
+            {/* 短信验证码 */}
+            <div className="px-3.5 py-[11px]">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <span className="text-[12px] text-ink">自动复制验证码</span>
+                  <div className="text-[12.5px] font-medium">短信验证码自动复制</div>
+                  <div
+                    className="mt-[2px] text-[11px] text-faint"
+                    title="需要先在电脑的「手机连接」里配对手机；短信内容只在电脑本地处理，不会上传"
+                  >
+                    手机收到验证码短信时自动复制到剪贴板
+                  </div>
                 </div>
-                <button
-                  onClick={() => void handleToggleSmsCode()}
-                  role="switch"
-                  aria-checked={settings.sms_code_enabled}
-                  aria-label="自动复制短信验证码"
-                  className={`relative w-[35px] h-5 rounded-full transition-colors duration-150 flex-shrink-0 ${
-                    settings.sms_code_enabled ? 'bg-accent' : 'bg-hairline'
-                  }`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-surface shadow-sm transition-transform duration-150 ${
-                    settings.sms_code_enabled ? 'translate-x-[15px]' : ''
-                  }`} />
-                </button>
+                <Switch
+                  checked={settings.sms_code_enabled}
+                  onChange={() => void handleToggleSmsCode()}
+                  label="自动复制短信验证码"
+                />
               </div>
 
               {/* 权限状态行:3 秒自动刷新,用户去系统设置勾选后回来就能看到变化 */}
               {settings.sms_code_enabled && smsStatus && (
-                <div className="mt-1.5 flex items-start justify-between gap-3">
-                  <p className="text-[11px] text-faint min-w-0 flex-1">
+                <div className="mt-2 flex items-start justify-between gap-3">
+                  <p className="text-[11px] text-faint min-w-0 flex-1 leading-relaxed">
                     {smsStatus.access === 'allowed' && (
                       <>
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-ok mr-1.5 align-[1px]" />
                         通知权限已开启
                         {smsStatus.capture_count > 0 && (
-                          <>，本次已捕获 {smsStatus.capture_count} 个验证码（最近 {formatCaptureTime(smsStatus.last_capture)}）</>
+                          <>，本次已捕获 {smsStatus.capture_count} 个（最近 {formatCaptureTime(smsStatus.last_capture)}）</>
                         )}
                       </>
                     )}
                     {smsStatus.access === 'unsupported' && '此系统版本不支持读取通知，功能不可用'}
                     {(smsStatus.access === 'denied' || smsStatus.access === 'unspecified') && (
-                      <>还没获得读取通知的权限。点右边的按钮打开系统设置，在「允许应用访问通知」里勾选本应用（应用名 clipboard-manager-tauri）</>
+                      <>还没获得读取通知的权限。点右侧按钮打开系统设置，在「允许应用访问通知」里勾选本应用（clipboard-manager-tauri）</>
                     )}
                   </p>
                   {(smsStatus.access === 'denied' || smsStatus.access === 'unspecified') && (
                     <button
                       onClick={() => void handleOpenNotificationSettings()}
-                      className="h-[26px] px-2.5 text-[11px] rounded-[8px] border border-hairline bg-surface text-muted hover:bg-hairline transition-colors duration-150 flex-shrink-0"
+                      className={`${ghostBtn} flex-shrink-0`}
                     >
                       打开系统设置
                     </button>
@@ -810,135 +725,119 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                 </div>
               )}
               {!settings.sms_code_enabled && (
-                <p className="text-[11px] text-faint mt-1">
-                  打开后会请求读取 Windows 通知的权限。短信内容只在电脑本地处理，不会上传
+                <p className="mt-1.5 text-[11px] text-faint">
+                  打开后会请求读取 Windows 通知的权限，内容仅在本地处理
                 </p>
               )}
             </div>
-          </div>
+          </Card>
 
-          {/* 清空历史 */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <span className="text-[12.5px] font-medium">清空剪贴板历史</span>
-              <p className="text-[11px] text-faint">按时间范围清除未收藏的记录及图片,收藏保留</p>
-            </div>
-            <button
-              onClick={() => setClearConfirmOpen(true)}
-              disabled={clearing}
-              className={`h-[30px] px-4 text-[12px] rounded-[9px] border border-hairline transition-colors duration-150 flex-shrink-0 ${
-                clearing
-                  ? 'bg-app text-faint cursor-not-allowed'
-                  : 'bg-app text-danger hover:bg-hairline'
-              }`}
-            >
-              {clearing ? '清空中…' : '清空'}
-            </button>
-          </div>
-
-          {/* 软件更新 */}
-          <div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[12.5px] font-medium">软件更新</span>
-              <button
-                onClick={handleCheckUpdate}
-                disabled={updateChecking}
-                className={`h-[30px] px-4 text-[11px] rounded-[9px] border border-hairline transition-colors duration-150 ${
-                  updateChecking
-                    ? 'bg-app text-faint cursor-not-allowed'
-                    : 'bg-app text-muted hover:bg-hairline'
-                }`}
-              >
-                {updateChecking ? '检查中…' : '检查更新'}
-              </button>
-            </div>
-            {updateResult && !updateResult.has_update && (
-              <p className="text-[11px] text-faint mt-1">已是最新版本(v{updateResult.current})</p>
-            )}
-            {updateResult && updateResult.has_update && (
-              <div className="mt-1.5">
-                <p className="text-[11px] text-faint">
-                  当前 v{updateResult.current} → 最新 <span className="text-accent">v{updateResult.latest}</span>
-                </p>
-                {updateNoteLines.length > 0 && (
-                  <ul className="mt-1.5 space-y-1">
-                    {updateNoteLines.map((line, i) => (
-                      <li key={i} className="flex gap-1.5 text-[11px] leading-relaxed text-faint">
-                        <span className="text-accent shrink-0 select-none">•</span>
-                        <span className="min-w-0 break-words">{line}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {updateResult.lanzou && updateResult.lanzou_password && (
-                  <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-[8px] bg-app border border-hairline">
-                    <span className="text-[11px] text-faint shrink-0">蓝奏云密码</span>
-                    <span className="text-[13px] font-mono font-medium tracking-widest text-ink select-all truncate">
-                      {updateResult.lanzou_password}
-                    </span>
-                    <button
-                      onClick={copyUpdatePassword}
-                      className="ml-auto shrink-0 h-[22px] px-2.5 text-[11px] rounded-[6px] border border-hairline text-muted hover:bg-hairline transition-colors duration-150"
-                    >
-                      {pwdCopied ? '已复制' : '复制'}
-                    </button>
-                  </div>
-                )}
-                <div className="flex gap-2 mt-2">
-                  {updateResult.lanzou && (
-                    <button
-                      onClick={() => {
-                        if (updateResult.lanzou_password) void copyUpdatePassword();
-                        openUrl(updateResult.lanzou!);
-                      }}
-                      className="h-[28px] px-3 text-[11px] rounded-[8px] border border-hairline text-muted hover:bg-hairline transition-colors duration-150"
-                    >
-                      蓝奏云下载
+          {/* 数据 */}
+          <SectionLabel>数据</SectionLabel>
+          <Card>
+            <div className="px-3.5 py-[11px]">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[12.5px] font-medium">数据存储位置</div>
+                <div className="flex gap-2 flex-shrink-0">
+                  {storageInfo && !storageInfo.is_default && (
+                    <button onClick={handleResetStorage} className={ghostBtn}>
+                      恢复默认
                     </button>
                   )}
-                  {updateResult.github && (
-                    <button
-                      onClick={() => openUrl(updateResult.github!)}
-                      className="h-[28px] px-3 text-[11px] rounded-[8px] border border-hairline text-muted hover:bg-hairline transition-colors duration-150"
-                    >
-                      GitHub 下载
-                    </button>
-                  )}
+                  <button onClick={handleChangeStorage} className={ghostBtn}>
+                    更改
+                  </button>
                 </div>
               </div>
-            )}
-            {updateError && (
-              <p className="text-[11px] text-faint mt-1">{updateError}(无网络或版本服务不可用)</p>
-            )}
-          </div>
-
-          {/* 关闭行为 */}
-          <div>
-            <span className="text-[12.5px] font-medium">关闭行为</span>
-            <div className="flex mt-2 gap-[3px] p-[3px] rounded-[10px] bg-app">
-              {([
-                { value: 'ask', label: '询问' },
-                { value: 'minimize', label: '最小化到托盘' },
-                { value: 'close', label: '直接关闭' },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setCloseBehavior(opt.value)}
-                  className={`flex-1 h-[27px] text-[11.5px] rounded-[7px] transition-[background-color,color,box-shadow] duration-150 ${
-                    settings.close_behavior === opt.value
-                      ? 'bg-surface text-accent font-semibold shadow-lift'
-                      : 'text-muted hover:text-faint'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              <p
+                className="mt-[5px] text-[10.5px] font-mono text-faint truncate"
+                title="数据库与图片保存在此目录，迁移在重启后进行且失败自动回退"
+              >
+                {storageInfo ? storageInfo.data_dir : '加载中…'}
+              </p>
             </div>
-          </div>
-        </div>
+            <Row title="清空剪贴板历史" desc="按时间范围清除未收藏的记录及图片，收藏保留">
+              <button
+                onClick={() => setClearConfirmOpen(true)}
+                disabled={clearing}
+                className={ghostBtnDanger}
+              >
+                {clearing ? '清空中…' : '清空…'}
+              </button>
+            </Row>
+          </Card>
 
-        <div className="px-5 pt-3 pb-4 border-t border-hairline">
-          <span className="text-[11px] text-faint">更改即时保存,无需手动确认</span>
+          {/* 关于 */}
+          <SectionLabel>关于</SectionLabel>
+          <Card>
+            <div className="px-3.5 py-[11px]">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-[12.5px] font-medium">软件更新</div>
+                <button onClick={handleCheckUpdate} disabled={updateChecking} className={ghostBtn}>
+                  {updateChecking ? '检查中…' : '检查更新'}
+                </button>
+              </div>
+              {updateResult && !updateResult.has_update && (
+                <p className="mt-1.5 text-[11px] text-faint">已是最新版本（v{updateResult.current}）</p>
+              )}
+              {updateResult && updateResult.has_update && (
+                <div className="mt-2">
+                  <p className="text-[11px] text-faint">
+                    当前 v{updateResult.current} → 最新 <span className="text-accent">v{updateResult.latest}</span>
+                  </p>
+                  {updateNoteLines.length > 0 && (
+                    <ul className="mt-1.5 space-y-1">
+                      {updateNoteLines.map((line, i) => (
+                        <li key={i} className="flex gap-1.5 text-[11px] leading-relaxed text-faint">
+                          <span className="text-accent shrink-0 select-none">•</span>
+                          <span className="min-w-0 break-words">{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {updateResult.lanzou && updateResult.lanzou_password && (
+                    <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-[8px] bg-app border border-hairline">
+                      <span className="text-[11px] text-faint shrink-0">蓝奏云密码</span>
+                      <span className="text-[13px] font-mono font-medium tracking-widest text-ink select-all truncate">
+                        {updateResult.lanzou_password}
+                      </span>
+                      <button
+                        onClick={copyUpdatePassword}
+                        className={`${ghostBtn} ml-auto shrink-0 h-[22px] px-2.5 rounded-[6px]`}
+                      >
+                        {pwdCopied ? '已复制' : '复制'}
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-2">
+                    {updateResult.lanzou && (
+                      <button
+                        onClick={() => {
+                          if (updateResult.lanzou_password) void copyUpdatePassword();
+                          openUrl(updateResult.lanzou!);
+                        }}
+                        className={ghostBtn}
+                      >
+                        蓝奏云下载
+                      </button>
+                    )}
+                    {updateResult.github && (
+                      <button onClick={() => openUrl(updateResult.github!)} className={ghostBtn}>
+                        GitHub 下载
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+              {updateError && (
+                <p className="mt-1.5 text-[11px] text-faint">{updateError}（无网络或版本服务不可用）</p>
+              )}
+            </div>
+          </Card>
+
+          <div className="py-3 text-center text-[10.5px] tracking-[0.04em] text-faint">
+            更改即时保存
+          </div>
         </div>
       </div>
 
