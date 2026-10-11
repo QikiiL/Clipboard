@@ -156,6 +156,12 @@ pub fn run() {
                         .expect("Failed to run migration");
                 }
 
+                // 003(html_path/rtf_path)不在共用迁移列表里(ALTER 非幂等,
+                // 见 get_migrations 注释),单独走列探测守卫式执行
+                apply_rich_format_columns(&pool)
+                    .await
+                    .expect("Failed to apply migration 003_add_rich_formats");
+
                 pool
             });
 
@@ -173,6 +179,20 @@ pub fn run() {
                 .allow_directory(&images_dir, false)
             {
                 eprintln!("Failed to extend asset protocol scope: {}", e);
+            }
+
+            // formats 目录(CF_HTML/RTF 原始字节):**预防性授权**。
+            // 本次富文本预览并不依赖它 —— 前端拿的是 get_rich_preview 命令
+            // 返回的净化片段,图片走 srcDoc 里的 data: URI,全程不经过 asset
+            // 协议。这里授权只是为了与 images 对齐:自定义存储位置下任何
+            // 将来按路径直读 formats 的实现不会被作用域挡掉
+            let formats_dir = services::storage_service::formats_dir(app.handle());
+            let _ = std::fs::create_dir_all(&formats_dir);
+            if let Err(e) = app
+                .asset_protocol_scope()
+                .allow_directory(&formats_dir, false)
+            {
+                eprintln!("Failed to extend asset protocol scope for formats: {}", e);
             }
 
             // 单击条目的目标行为(默认粘贴,可在状态栏手动切换)与粘贴目标窗口
@@ -337,6 +357,7 @@ pub fn run() {
             commands::clipboard::pause_monitoring,
             commands::clipboard::get_image_base64,
             commands::clipboard::update_item_content,
+            commands::clipboard::get_rich_preview,
             commands::continuous_paste::start_continuous_paste,
             commands::continuous_paste::start_continuous_paste_auto,
             commands::continuous_paste::continuous_paste_next,
@@ -418,16 +439,16 @@ async fn cleanup_expired_items(app_handle: &tauri::AppHandle) {
 
     let mut deleted: u64 = 0;
     for (where_clause, value) in conditions {
-        let file_paths: Vec<Option<String>> =
-            match sqlx::query_scalar::<_, Option<String>>(&format!(
-                "SELECT file_path FROM items WHERE {}",
+        let file_rows: Vec<(Option<String>, Option<String>, Option<String>)> =
+            match sqlx::query_as(&format!(
+                "SELECT file_path, html_path, rtf_path FROM items WHERE {}",
                 where_clause
             ))
             .bind(value)
             .fetch_all(&pool)
             .await
             {
-                Ok(paths) => paths,
+                Ok(rows) => rows,
                 Err(e) => {
                     eprintln!("Cleanup error (select): {}", e);
                     continue;
@@ -446,8 +467,13 @@ async fn cleanup_expired_items(app_handle: &tauri::AppHandle) {
             }
         }
 
-        for path in file_paths.iter().flatten() {
-            services::image_cleanup::remove_image_file(app_handle, path);
+        for (file_path, html_path, rtf_path) in file_rows.iter() {
+            if let Some(path) = file_path {
+                services::image_cleanup::remove_image_file(app_handle, path);
+            }
+            for path in [html_path, rtf_path].into_iter().flatten() {
+                services::image_cleanup::remove_format_file(app_handle, path);
+            }
         }
     }
 
@@ -474,5 +500,132 @@ fn get_migrations() -> Vec<tauri_plugin_sql::Migration> {
             sql: include_str!("../migrations/002_add_indexes.sql"),
             kind: tauri_plugin_sql::MigrationKind::Up,
         },
+        // 注意:003_add_rich_formats **不能**进这份共用列表。
+        // 这份列表同时被两处消费:(a) 插件注册(前端 Database.load 按版本表
+        // 执行,不会重复);(b) lib.rs setup 里的手动循环——**每次启动无条件
+        // 重放全部迁移并 .expect()**。001/002 全是 IF NOT EXISTS 所以安全;
+        // 003 是 ALTER TABLE ADD COLUMN,非幂等,重放即 duplicate column
+        // panic。因此 003 走带列探测守卫的 apply_rich_format_columns(),
+        // 在手动循环之后单独执行。未来新增迁移:要么写成幂等 SQL 进这份
+        // 列表,要么同样走守卫式单独执行。
     ]
+}
+
+/// 003 的应用逻辑:PRAGMA table_info 探测 items 现有列,
+/// html_path/rtf_path 按缺失情况各自 ALTER,已存在则跳过。
+/// 幂等,可安全重放(守卫存在的意义就是让"每次启动都执行"安全)。
+async fn apply_rich_format_columns(pool: &sqlx::sqlite::SqlitePool) -> Result<(), String> {
+    // table_info 各行的 name 列(索引 1)是列名;cid 等其余列忽略
+    let columns: Vec<(i64, String)> = sqlx::query_as("PRAGMA table_info(items)")
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("读取 items 表结构失败: {}", e))?;
+    let existing: std::collections::HashSet<&str> = columns
+        .iter()
+        .map(|(_, name)| name.as_str())
+        .collect();
+
+    for (column, ddl) in [
+        ("html_path", "ALTER TABLE items ADD COLUMN html_path TEXT"),
+        ("rtf_path", "ALTER TABLE items ADD COLUMN rtf_path TEXT"),
+    ] {
+        if !existing.contains(column) {
+            sqlx::query(ddl)
+                .execute(pool)
+                .await
+                .map_err(|e| format!("迁移 003 添加 {} 失败: {}", column, e))?;
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 模拟"连续两次启动":003 应用逻辑重放两次,
+    /// 第二次必须不报错,两次后两列存在且已有数据无损。
+    #[tokio::test]
+    async fn rich_format_migration_is_idempotent_across_restarts() {
+        let dir = std::env::temp_dir().join(format!("dsh-clip-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let db_file = dir.join("idempotent.db");
+
+        let options = sqlx::sqlite::SqliteConnectOptions::new()
+            .filename(&db_file)
+            .create_if_missing(true);
+        let pool = sqlx::sqlite::SqlitePool::connect_with(options)
+            .await
+            .expect("连接测试库");
+
+        // 先建基础表结构(001),模拟已有旧版本库
+        sqlx::query(include_str!("../migrations/001_create_tables.sql"))
+            .execute(&pool)
+            .await
+            .expect("建基础表");
+
+        // 第一次应用 003
+        apply_rich_format_columns(&pool).await.expect("首次应用 003");
+
+        // 插入一条数据,验证重放不丢
+        sqlx::query("INSERT INTO items (type, content, content_hash) VALUES (0, '数据', 'h1')")
+            .execute(&pool)
+            .await
+            .expect("插入数据");
+
+        // 第二次应用(模拟重启后的重放)——不报错是本测试的核心断言
+        apply_rich_format_columns(&pool).await.expect("重放 003 必须幂等成功");
+
+        // 两列存在且可写
+        sqlx::query("INSERT INTO items (type, content, content_hash, html_path, rtf_path) VALUES (0, '富', 'h2', 'x.html', 'y.rtf')")
+            .execute(&pool)
+            .await
+            .expect("新列可写");
+
+        // 旧数据无损
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM items")
+            .fetch_one(&pool)
+            .await
+            .expect("计数");
+        assert_eq!(count, 2, "重放不得丢数据");
+
+        // 第三次重放再确认(列已全部存在的完全 no-op 路径)
+        apply_rich_format_columns(&pool).await.expect("第三次重放");
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 全新安装路径:items 表刚由 001 建好,003 正常加两列
+    #[tokio::test]
+    async fn rich_format_migration_on_fresh_database() {
+        let dir = std::env::temp_dir().join(format!("dsh-clip-fresh-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let db_file = dir.join("fresh.db");
+
+        let options = sqlx::sqlite::SqliteConnectOptions::new()
+            .filename(&db_file)
+            .create_if_missing(true);
+        let pool = sqlx::sqlite::SqlitePool::connect_with(options)
+            .await
+            .expect("连接测试库");
+
+        sqlx::query(include_str!("../migrations/001_create_tables.sql"))
+            .execute(&pool)
+            .await
+            .expect("建基础表");
+
+        apply_rich_format_columns(&pool).await.expect("全新库应用 003");
+
+        let columns: Vec<(i64, String)> = sqlx::query_as("PRAGMA table_info(items)")
+            .fetch_all(&pool)
+            .await
+            .expect("读表结构");
+        let names: Vec<String> = columns.into_iter().map(|(_, n)| n).collect();
+        assert!(names.contains(&"html_path".to_string()), "html_path 必须存在: {:?}", names);
+        assert!(names.contains(&"rtf_path".to_string()), "rtf_path 必须存在: {:?}", names);
+
+        pool.close().await;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -1,0 +1,2 @@
+ALTER TABLE items ADD COLUMN html_path TEXT;
+ALTER TABLE items ADD COLUMN rtf_path TEXT;

@@ -74,6 +74,26 @@ pub fn images_dir(app: &tauri::AppHandle) -> PathBuf {
     current_data_dir(app).join("images")
 }
 
+/// 统一的 formats 目录解析(html/rtf 原始字节文件,与 images 同级)
+pub fn formats_dir(app: &tauri::AppHandle) -> PathBuf {
+    current_data_dir(app).join("formats")
+}
+
+/// 校验富文本格式文件路径位于应用 formats 目录内,返回规范化绝对路径;
+/// 越界或无法解析返回 None。与 resolve_image_path 同源的安全守卫:
+/// html_path/rtf_path 来自数据库条目,粘贴读取与删除都必须先过这道校验。
+pub fn resolve_format_path(app: &tauri::AppHandle, file_path: &str) -> Option<PathBuf> {
+    let formats = formats_dir(app);
+    std::fs::create_dir_all(&formats).ok()?;
+    let canonical_formats = std::fs::canonicalize(&formats).ok()?;
+    let canonical = std::fs::canonicalize(file_path).ok()?;
+    if canonical.starts_with(&canonical_formats) {
+        Some(canonical)
+    } else {
+        None
+    }
+}
+
 /// 校验图片路径位于应用 images 目录内,返回规范化的绝对路径;越界或无法解析返回 None。
 /// 图片的 file_path 来自数据库条目,可能指向 images 之外的任意文件,
 /// 因此读取、删除、粘贴三条路径都必须先过这道校验,否则任一处的守卫缺口
@@ -178,7 +198,23 @@ fn migrate_data(from: &Path, to: &Path) -> Result<(), String> {
         }
     }
 
-    rewrite_image_paths(&to.join("clipboard.db"), from, to)?;
+    // html/rtf 富文本原始字节文件,与 images 同级的平铺单层目录
+    let from_formats = from.join("formats");
+    if from_formats.is_dir() {
+        let to_formats = to.join("formats");
+        std::fs::create_dir_all(&to_formats).map_err(|e| format!("创建格式目录失败: {}", e))?;
+        for entry in std::fs::read_dir(&from_formats).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            if entry.path().is_file() {
+                let file_name = entry.file_name();
+                std::fs::copy(entry.path(), to_formats.join(&file_name)).map_err(|e| {
+                    format!("复制格式文件 {} 失败: {}", file_name.to_string_lossy(), e)
+                })?;
+            }
+        }
+    }
+
+    rewrite_absolute_paths(&to.join("clipboard.db"), from, to)?;
 
     // 新库已成功打开并完成路径改写,旧位置数据可以清理
     // (只删数据文件;默认配置目录里的 settings.json 等不受影响)
@@ -186,11 +222,12 @@ fn migrate_data(from: &Path, to: &Path) -> Result<(), String> {
         let _ = std::fs::remove_file(from.join(name));
     }
     let _ = std::fs::remove_dir_all(from.join("images"));
+    let _ = std::fs::remove_dir_all(from.join("formats"));
     Ok(())
 }
 
-/// 把数据库里以旧目录为前缀的图片绝对路径改写到新目录
-fn rewrite_image_paths(db_location: &Path, from: &Path, to: &Path) -> Result<(), String> {
+/// 把数据库里以旧目录为前缀的绝对路径(file_path/html_path/rtf_path)改写到新目录
+fn rewrite_absolute_paths(db_location: &Path, from: &Path, to: &Path) -> Result<(), String> {
     let from_native = from.to_string_lossy().to_string();
     let from_fwd = from_native.replace('\\', "/");
     let to_native = to.to_string_lossy().to_string();
@@ -201,25 +238,41 @@ fn rewrite_image_paths(db_location: &Path, from: &Path, to: &Path) -> Result<(),
             .await
             .map_err(|e| format!("打开迁移后的数据库失败: {}", e))?;
 
-        let rows: Vec<(i64, String)> =
-            sqlx::query_as("SELECT id, file_path FROM items WHERE file_path IS NOT NULL")
-                .fetch_all(&pool)
-                .await
-                .map_err(|e| format!("读取图片路径失败: {}", e))?;
+        // 列探测:旧版本库(升级前抓的)可能没有 html_path/rtf_path 列,
+        // 此时只改写 file_path,不能因缺列整体报错回退
+        let columns: Vec<(i64, String)> = sqlx::query_as("PRAGMA table_info(items)")
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| format!("读取 items 表结构失败: {}", e))?;
+        let existing: std::collections::HashSet<&str> =
+            columns.iter().map(|(_, name)| name.as_str()).collect();
+        let targets: Vec<&str> = ["file_path", "html_path", "rtf_path"]
+            .into_iter()
+            .filter(|c| existing.contains(c))
+            .collect();
 
-        for (id, fp) in rows {
-            let rest = fp
-                .strip_prefix(&from_native)
-                .or_else(|| fp.strip_prefix(&from_fwd))
-                .map(|r| r.trim_start_matches(['\\', '/']).to_string());
-            if let Some(rest) = rest {
-                let new_path = Path::new(&to_native).join(&rest);
-                sqlx::query("UPDATE items SET file_path = ? WHERE id = ?")
-                    .bind(new_path.to_string_lossy().to_string())
-                    .bind(id)
-                    .execute(&pool)
+        // 逐列改写:每个路径列独立扫描,不要求三列同批有值
+        for column in targets {
+            let rows: Vec<(i64, String)> =
+                sqlx::query_as(&format!("SELECT id, {column} FROM items WHERE {column} IS NOT NULL"))
+                    .fetch_all(&pool)
                     .await
-                    .map_err(|e| format!("改写图片路径失败: {}", e))?;
+                    .map_err(|e| format!("读取 {} 失败: {}", column, e))?;
+
+            for (id, fp) in rows {
+                let rest = fp
+                    .strip_prefix(&from_native)
+                    .or_else(|| fp.strip_prefix(&from_fwd))
+                    .map(|r| r.trim_start_matches(['\\', '/']).to_string());
+                if let Some(rest) = rest {
+                    let new_path = Path::new(&to_native).join(&rest);
+                    sqlx::query(&format!("UPDATE items SET {column} = ? WHERE id = ?"))
+                        .bind(new_path.to_string_lossy().to_string())
+                        .bind(id)
+                        .execute(&pool)
+                        .await
+                        .map_err(|e| format!("改写 {} 失败: {}", column, e))?;
+                }
             }
         }
         pool.close().await;
@@ -244,7 +297,10 @@ fn apply_storage_change(app: &tauri::AppHandle, new_dir: PathBuf) -> Result<(), 
     if new.starts_with(&cur) || cur.starts_with(&new) {
         return Err("新位置不能与当前位置互相嵌套".to_string());
     }
-    if new.join("clipboard.db").exists() || new.join("images").exists() {
+    if new.join("clipboard.db").exists()
+        || new.join("images").exists()
+        || new.join("formats").exists()
+    {
         return Err("所选文件夹已包含剪贴板数据,请选择空文件夹".to_string());
     }
     std::fs::create_dir_all(&new).map_err(|e| format!("创建目录失败: {}", e))?;

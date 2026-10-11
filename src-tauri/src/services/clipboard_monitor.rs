@@ -3,6 +3,7 @@ use crate::services::exclusion_service::{ExclusionCheck, ExclusionReason, Exclus
 use crate::utils::hash::{compute_hash, compute_hash_bytes};
 use arboard::Clipboard as ArboardClipboard;
 use image::RgbaImage;
+use sha2::{Digest, Sha256};
 use sqlx::sqlite::SqlitePool;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -99,9 +100,105 @@ struct CapturedContent {
     image_bytes: Option<Vec<u8>>,
     width: usize,
     height: usize,
+    /// Windows 扩展格式的原始字节(混排内容):"HTML Format" / "Rich Text Format"。
+    /// 保留 CF_HTML 头部原样、不解析不重构,保证恢复时无损往返。
+    /// HDROP/纯图片路径填 None(纯图片位图已完整保留图片,不在本 bug 范围)。
+    html_bytes: Option<Vec<u8>>,
+    rtf_bytes: Option<Vec<u8>>,
     /// 放置这段内容的来源进程名(小写);判定不了时为 None。
     /// 必须在打开剪贴板之前取:剪贴板是独占资源,打开后 GetClipboardOwner 会失败
     source_process: Option<String>,
+}
+
+/// 文本类条目的组合去重 hash:(text, html_bytes, rtf_bytes) 依次喂给 SHA-256,
+/// 中间加分隔符避免相邻字段拼接歧义。
+/// 无 html/rtf 时必须与 compute_hash(text) 完全一致 —— 否则升级后旧条目
+/// 与同一内容的纯文本新捕获 hash 不同,会被当成两条重复入库。
+fn compute_text_combo_hash(text: &str, html: Option<&[u8]>, rtf: Option<&[u8]>) -> String {
+    match (html, rtf) {
+        (None, None) => compute_hash(text),
+        _ => {
+            let mut hasher = Sha256::new();
+            hasher.update(text.as_bytes());
+            // 分隔符用不易出现在正常内容里的字节序列
+            hasher.update(b"\x00--fmt--\x00");
+            if let Some(h) = html {
+                hasher.update(h);
+            }
+            hasher.update(b"\x00--fmt--\x00");
+            if let Some(r) = rtf {
+                hasher.update(r);
+            }
+            format!("{:x}", hasher.finalize())
+        }
+    }
+}
+
+/// 组装文本类捕获结果(纯逻辑,供 read_clipboard_content 复用与单测覆盖)。
+/// html/rtf 缺失(None)时产物与旧路径逐字段一致。
+fn assemble_text_capture(
+    text: String,
+    item_type: i32,
+    html_bytes: Option<Vec<u8>>,
+    rtf_bytes: Option<Vec<u8>>,
+    source_process: Option<String>,
+) -> CapturedContent {
+    CapturedContent {
+        content: text,
+        item_type,
+        image_hash: None,
+        image_bytes: None,
+        width: 0,
+        height: 0,
+        html_bytes,
+        rtf_bytes,
+        source_process,
+    }
+}
+
+/// 单次捕获读到的文本 + 扩展格式原始字节
+struct TextWithFormats {
+    text: String,
+    html: Option<Vec<u8>>,
+    rtf: Option<Vec<u8>>,
+}
+
+/// 单个 clipboard-win 会话内读取文本 + "HTML Format" + "Rich Text Format"。
+/// 关键:GetClipboardData 必须 OpenClipboard 后才能成功——clipboard_win::get()
+/// 系列不打开剪贴板,必须在持有 Clipboard guard 的作用域内调用。
+/// 文本用 clipboard_win::formats::Unicode 读(与 arboard get_text 在 Windows
+/// 上同实现:raw::get_string,含尾 NUL 剥离,行为逐字节一致)。
+/// 同会话读三格式还消除了"读文本后、读格式前剪贴板被改写"的 TOCTOU。
+/// 返回 None = 文本不可用(与旧路径语义一致);html/rtf 读不到则为 None。
+fn read_text_with_extended_formats() -> Option<TextWithFormats> {
+    use clipboard_win::formats::{RawData, Unicode};
+
+    // 打不开剪贴板(被其他进程占用)时本轮什么都读不到,下一轮再试
+    let _clip = clipboard_win::Clipboard::new_attempts(10).ok()?;
+
+    // 文本必须可用:与旧路径一致,纯文本是条目的存在基础
+    if !clipboard_win::is_format_avail(clipboard_win::formats::CF_UNICODETEXT) {
+        return None;
+    }
+    let text: String = clipboard_win::get(Unicode).ok()?;
+    if text.is_empty() {
+        return None;
+    }
+
+    // 扩展格式:格式不可用或读取失败返回 None(原始字节含 CF_HTML 头原样保留)
+    fn read_named_format(name: &str) -> Option<Vec<u8>> {
+        let fmt = clipboard_win::raw::register_format(name)?;
+        let data: Vec<u8> = clipboard_win::get(RawData(fmt.get())).ok()?;
+        if data.is_empty() {
+            None
+        } else {
+            Some(data)
+        }
+    }
+    let html = read_named_format("HTML Format");
+    let rtf = read_named_format("Rich Text Format");
+
+    Some(TextWithFormats { text, html, rtf })
 }
 
 /// Read clipboard content on a blocking thread.
@@ -132,6 +229,8 @@ fn read_clipboard_content() -> Option<CapturedContent> {
                         image_bytes: None,
                         width: 0,
                         height: 0,
+                        html_bytes: None,
+                        rtf_bytes: None,
                         source_process,
                     });
                 }
@@ -155,6 +254,9 @@ fn read_clipboard_content() -> Option<CapturedContent> {
                 image_bytes: Some(bytes),
                 width,
                 height,
+                // 纯图片路径行为一字不改:位图已完整保留图片,不读扩展格式
+                html_bytes: None,
+                rtf_bytes: None,
                 source_process,
             });
         }
@@ -169,31 +271,31 @@ fn read_clipboard_content() -> Option<CapturedContent> {
                     image_bytes: Some(bytes),
                     width,
                     height,
+                    html_bytes: None,
+                    rtf_bytes: None,
                     source_process,
                 });
             }
         }
     }
 
-    // Try reading text
-    match cb.get_text() {
-        Ok(text) => {
-            if !text.is_empty() {
-                let item_type = detect_content_type(&text);
-                Some(CapturedContent {
-                    content: text,
-                    item_type,
-                    image_hash: None,
-                    image_bytes: None,
-                    width: 0,
-                    height: 0,
-                    source_process,
-                })
-            } else {
-                None
-            }
+    // Try reading text + extended formats (HTML/RTF) in ONE clipboard-win session.
+    // 图文混排内容:文字之外通常同时带 "HTML Format"/"Rich Text Format"
+    // (图片内嵌其中、无独立 CF_DIB)。上方的 arboard 调用是即开即关、
+    // 不长期持锁;这里持 clipboard-win guard 是 GetClipboardData 能成功的
+    // 前提(剪贴板独占打开,不持 guard 的 GetClipboardData 必然失败)。
+    match read_text_with_extended_formats() {
+        Some(TextWithFormats {
+            text,
+            html: html_bytes,
+            rtf: rtf_bytes,
+        }) => {
+            let item_type = detect_content_type(&text);
+            Some(assemble_text_capture(
+                text, item_type, html_bytes, rtf_bytes, source_process,
+            ))
         }
-        Err(_) => None,
+        None => None,
     }
 }
 
@@ -253,6 +355,28 @@ fn save_image_to_disk(
 /// 抑制 TTL:正常投递在 set_suppress(true) 后 ≤1s 内显式解除
 /// (单击路径 500ms,队列步进更短);TTL 只是投递卡死时的兜底
 const SUPPRESS_TTL_MS: u64 = 2000;
+
+/// 把富文本格式的原始字节写入 formats 目录。
+/// 文件名用组合 hash 前 16 字符 + 扩展名。失败返回 None:
+/// 与图片落盘失败不同,这里不丢整个条目 —— 调用方降级为纯文本入库。
+fn save_format_to_disk(
+    app_handle: &tauri::AppHandle,
+    hash: &str,
+    ext: &str,
+    bytes: &[u8],
+) -> Option<String> {
+    let formats_dir = crate::services::storage_service::formats_dir(app_handle);
+    if let Err(e) = std::fs::create_dir_all(&formats_dir) {
+        eprintln!("Failed to create formats directory: {}", e);
+        return None;
+    }
+    let file_name = format!("{}.{}", &hash[..hash.len().min(16)], ext);
+    let path = formats_dir.join(&file_name);
+    std::fs::write(&path, bytes)
+        .map_err(|e| eprintln!("Failed to save format file {:?}: {}", path, e))
+        .ok()?;
+    Some(path.to_string_lossy().to_string())
+}
 
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
@@ -327,7 +451,11 @@ impl ClipboardMonitor {
                 let seed_hash = if let Some(ih) = captured.image_hash {
                     ih
                 } else {
-                    compute_hash(&captured.content)
+                    compute_text_combo_hash(
+                        &captured.content,
+                        captured.html_bytes.as_deref(),
+                        captured.rtf_bytes.as_deref(),
+                    )
                 };
                 *monitor.last_hash.lock().await = seed_hash;
             }
@@ -358,13 +486,15 @@ impl ClipboardMonitor {
                     image_bytes,
                     width: img_width,
                     height: img_height,
+                    html_bytes,
+                    rtf_bytes,
                     source_process,
                 } = captured;
 
                 let hash = if let Some(ih) = image_hash {
                     ih
                 } else {
-                    compute_hash(&content)
+                    compute_text_combo_hash(&content, html_bytes.as_deref(), rtf_bytes.as_deref())
                 };
 
                 // 用户在「已排除」提示上点了「仍要记录」:清空 last_hash,让本轮
@@ -440,6 +570,21 @@ impl ClipboardMonitor {
                     None
                 };
 
+                // html/rtf 原始字节落盘(仅文本类条目携带)。落盘失败降级:
+                // 条目照常入库、两列置 NULL,恢复时退化为纯文本,不丢条目
+                let (html_path, rtf_path) = if item_type == ClipboardType::Image as i32 {
+                    (None, None)
+                } else {
+                    (
+                        html_bytes
+                            .as_deref()
+                            .and_then(|b| save_format_to_disk(&app_handle, &hash, "html", b)),
+                        rtf_bytes
+                            .as_deref()
+                            .and_then(|b| save_format_to_disk(&app_handle, &hash, "rtf", b)),
+                    )
+                };
+
                 // Update last hash
                 {
                     let mut last = monitor.last_hash.lock().await;
@@ -480,13 +625,15 @@ impl ClipboardMonitor {
                     }
                     _ => {
                         let result = sqlx::query(
-                            "INSERT INTO items (type, content, content_hash, file_path, preview) VALUES (?, ?, ?, ?, ?)",
+                            "INSERT INTO items (type, content, content_hash, file_path, preview, html_path, rtf_path) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         )
                         .bind(item_type)
                         .bind(&content)
                         .bind(&hash)
                         .bind(&file_path)
                         .bind(&preview)
+                        .bind(&html_path)
+                        .bind(&rtf_path)
                         .execute(&db)
                         .await;
 
@@ -512,5 +659,144 @@ impl Clone for ClipboardMonitor {
             paused: Arc::clone(&self.paused),
             last_hash: Arc::clone(&self.last_hash),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---------- 组合哈希 ----------
+
+    #[test]
+    fn combo_hash_same_triple_is_stable() {
+        let a = compute_text_combo_hash("hello", Some(b"<b>hello</b>"), Some(b"{\\rtf1}"));
+        let b = compute_text_combo_hash("hello", Some(b"<b>hello</b>"), Some(b"{\\rtf1}"));
+        assert_eq!(a, b, "同 (text,html,rtf) 三元组必须得到同一 hash");
+    }
+
+    #[test]
+    fn combo_hash_differs_on_html() {
+        let a = compute_text_combo_hash("hello", Some(b"<b>hello</b>"), None);
+        let b = compute_text_combo_hash("hello", Some(b"<i>hello</i>"), None);
+        assert_ne!(a, b, "同文字不同 html 不能被合并为同一条目");
+    }
+
+    #[test]
+    fn combo_hash_differs_on_rtf() {
+        let a = compute_text_combo_hash("hello", None, Some(b"{\\rtf1 a}"));
+        let b = compute_text_combo_hash("hello", None, Some(b"{\\rtf1 b}"));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn combo_hash_no_formats_falls_back_to_text_hash() {
+        let plain = compute_text_combo_hash("hello", None, None);
+        assert_eq!(plain, compute_hash("hello"), "无 html/rtf 时必须与旧 hash 完全一致");
+        // 有格式时必须与纯文本 hash 不同,否则旧条目会和新格式条目误合并
+        assert_ne!(plain, compute_text_combo_hash("hello", Some(b"<b>x</b>"), None));
+    }
+
+    // ---------- 捕获归集(纯逻辑) ----------
+
+    fn cap(text: &str, item_type: i32, html: Option<Vec<u8>>, rtf: Option<Vec<u8>>) -> CapturedContent {
+        assemble_text_capture(text.to_string(), item_type, html, rtf, None)
+    }
+
+    #[test]
+    fn capture_without_formats_keeps_legacy_shape() {
+        let c = cap("普通文本", ClipboardType::Text as i32, None, None);
+        assert_eq!(c.content, "普通文本");
+        assert_eq!(c.item_type, ClipboardType::Text as i32);
+        assert!(c.html_bytes.is_none());
+        assert!(c.rtf_bytes.is_none());
+        assert!(c.image_bytes.is_none());
+        assert!(c.image_hash.is_none());
+        assert_eq!(c.width, 0);
+        assert_eq!(c.height, 0);
+    }
+
+    #[test]
+    fn capture_with_formats_carries_bytes() {
+        let c = cap(
+            "图文",
+            ClipboardType::Text as i32,
+            Some(b"Version:0.9\r\n<html>".to_vec()),
+            Some(b"{\\rtf1}".to_vec()),
+        );
+        assert_eq!(c.html_bytes.as_deref(), Some(&b"Version:0.9\r\n<html>"[..]));
+        assert_eq!(c.rtf_bytes.as_deref(), Some(&b"{\\rtf1}"[..]));
+        // content 仍是纯文本(排除规则/预览/前端展示的判定基准不变)
+        assert_eq!(c.content, "图文");
+    }
+
+    #[test]
+    fn html_only_capture_keeps_rtf_none() {
+        let c = cap("t", ClipboardType::Link as i32, Some(b"<a/>".to_vec()), None);
+        assert!(c.html_bytes.is_some());
+        assert!(c.rtf_bytes.is_none());
+    }
+
+    // ---------- 落盘文件名 ----------
+
+    #[test]
+    fn format_file_name_uses_hash_prefix_and_ext() {
+        // 固定 hash 的字面量期望(不用同一表达式复算,避免断言恒真)
+        let hash = "0123456789abcdef0123456789abcdef";
+        assert_eq!(format!("{}.{}", &hash[..16], "html"), "0123456789abcdef.html");
+        assert_eq!(format!("{}.{}", &hash[..16], "rtf"), "0123456789abcdef.rtf");
+        // 短 hash 不越界
+        let short = "abc";
+        assert_eq!(format!("{}.{}", &short[..short.len().min(16)], "rtf"), "abc.rtf");
+    }
+
+    // ---------- 捕获侧真机往返(读侧覆盖) ----------
+
+    /// 写入三格式 → 调捕获读取路径 → 断言读回的 html/rtf 字节逐字节一致、
+    /// 文本一致。这是对 read_text_with_extended_formats 持 guard 读取的
+    /// 直接验证(不持 guard 的 GetClipboardData 必然失败,读回 None 会在此暴露)。
+    /// 真机剪贴板测试,须单线程运行(多测试并行会抢占全局剪贴板):
+    /// cargo test --lib --release -- --ignored --test-threads=1 services::clipboard_monitor
+    #[test]
+    #[ignore = "需要交互式桌面会话的真机剪贴板,CI/无头环境不可靠"]
+    fn capture_roundtrip_reads_all_formats() {
+        let text = "捕获往返 roundtrip";
+        let html: &[u8] = b"Version:0.9\r\nStartHTML:0000000105\r\n<html><body>rich</body></html>";
+        let rtf: &[u8] = b"{\\rtf1\\ansi rich}";
+
+        // 用写回侧的同一套函数写入(与恢复端行为一致)
+        crate::services::paste_service::write_rich_text_to_clipboard(
+            text, Some(html), Some(rtf),
+        )
+        .expect("写入三格式应成功");
+
+        // 捕获读取:必须读回全部三种
+        let captured = read_text_with_extended_formats()
+            .expect("捕获读取必须成功(剪贴板上有 CF_UNICODETEXT)");
+        assert_eq!(captured.text, text, "文本必须往返一致");
+        assert_eq!(
+            captured.html.as_deref(),
+            Some(html),
+            "HTML Format 字节必须逐字节往返(含 CF_HTML 头)"
+        );
+        assert_eq!(
+            captured.rtf.as_deref(),
+            Some(rtf),
+            "Rich Text Format 字节必须逐字节往返"
+        );
+    }
+
+    /// 纯文本剪贴板(无扩展格式)上捕获:html/rtf 必须为 None,文本正常读回。
+    /// 锁定"扩展格式缺失时行为与旧路径一致"的真机侧验证。
+    #[test]
+    #[ignore = "需要真机剪贴板"]
+    fn capture_plain_text_reads_no_formats() {
+        crate::services::paste_service::write_rich_text_to_clipboard("纯文本捕获", None, None)
+            .expect("写纯文本应成功");
+        let captured = read_text_with_extended_formats()
+            .expect("纯文本剪贴板上捕获读取应成功");
+        assert_eq!(captured.text, "纯文本捕获");
+        assert!(captured.html.is_none(), "无 HTML Format 时必须为 None");
+        assert!(captured.rtf.is_none(), "无 RTF 时必须为 None");
     }
 }

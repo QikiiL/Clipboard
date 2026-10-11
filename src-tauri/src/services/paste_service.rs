@@ -6,6 +6,42 @@ use std::thread;
 use std::time::Duration;
 use tauri::{Emitter, Manager};
 
+/// 解析条目的富文本格式文件并读出原始字节:
+/// - 带可读的 html/rtf 文件 → Some(字节)(多格式写回用);
+/// - 文件缺失/读失败/越界 → None,降级走 set_text 纯文本路径,不报错中断粘贴。
+fn resolve_rich_formats(
+    app_handle: &tauri::AppHandle,
+    html_path: Option<&str>,
+    rtf_path: Option<&str>,
+) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
+    let resolve_and_read = |p: Option<&str>| -> Option<Vec<u8>> {
+        let raw = p?;
+        let canonical =
+            crate::services::storage_service::resolve_format_path(app_handle, raw)?;
+        std::fs::read(&canonical).ok()
+    };
+    (resolve_and_read(html_path), resolve_and_read(rtf_path))
+}
+
+/// 决定文本类条目的写入路径(纯逻辑,便于降级单测):
+/// - (None, None) → Plain(文件缺失/读失败/条目本无格式,降级 set_text)
+/// - 其余 → Rich(多格式原子写回)
+///
+/// 注意:只要任一格式可用就走 Rich,并整体写回(文本+可用格式)。
+#[derive(Debug, PartialEq, Eq)]
+enum TextWritePath {
+    Plain,
+    Rich,
+}
+
+fn choose_text_write_path(html: Option<&[u8]>, rtf: Option<&[u8]>) -> TextWritePath {
+    if html.is_some() || rtf.is_some() {
+        TextWritePath::Rich
+    } else {
+        TextWritePath::Plain
+    }
+}
+
 /// 单击条目的目标行为
 pub enum DeliverMode {
     /// 写入剪贴板后模拟 Ctrl+V,粘贴到之前聚焦的输入框
@@ -45,6 +81,8 @@ pub fn simulate_paste() -> Result<(), String> {
 
 /// 将文本写入剪切板;若剪贴板内容已与之一致则跳过写入(返回 false),
 /// 此时直接模拟 Ctrl+V 即可,避免重复复制。
+/// 注意:带 html/rtf 的条目不能走此优化 —— 剪贴板可能已被覆盖成同文本的
+/// 纯内容,跳过写入会让旧的多格式残留"顶包"粘出去,格式反而错乱。
 fn write_text_if_changed(text: &str) -> Result<bool, String> {
     let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     if let Ok(current) = cb.get_text() {
@@ -55,6 +93,42 @@ fn write_text_if_changed(text: &str) -> Result<bool, String> {
     cb.set_text(text.to_string())
         .map_err(|e| e.to_string())?;
     Ok(true)
+}
+
+/// 多格式原子写回:一次 OpenClipboard 会话内同时写
+/// CF_UNICODETEXT + "HTML Format"(字节原样) + "Rich Text Format"(字节原样)。
+/// 必须在同一会话内 set 完所有格式 —— 分多次会话会互相覆盖,只剩最后一种。
+/// pub(crate): 供捕获侧真机测试复用(读写两端同一套剪贴板操作,往返断言才有意义)。
+pub(crate) fn write_rich_text_to_clipboard(
+    text: &str,
+    html: Option<&[u8]>,
+    rtf: Option<&[u8]>,
+) -> Result<(), String> {
+    let register = |name: &str| -> Result<u32, String> {
+        clipboard_win::raw::register_format(name)
+            .map(|f| f.get())
+            .ok_or_else(|| format!("无法注册剪贴板格式: {}", name))
+    };
+
+    // arboard 必须先 drop(剪贴板独占打开),再持 clipboard-win guard 写全部格式
+    let _clip = clipboard_win::Clipboard::new_attempts(10)
+        .map_err(|e| format!("Failed to open clipboard: {}", e))?;
+    let cf_html = register("HTML Format")?;
+    let cf_rtf = register("Rich Text Format")?;
+
+    // 先清空再依次写;任一格式失败即报错,避免"只写进去一半"的静默错乱
+    clipboard_win::raw::empty().map_err(|e| format!("Failed to empty clipboard: {}", e))?;
+    clipboard_win::raw::set_string(text)
+        .map_err(|e| format!("Failed to set CF_UNICODETEXT: {}", e))?;
+    if let Some(h) = html {
+        clipboard_win::raw::set_without_clear(cf_html, h)
+            .map_err(|e| format!("Failed to set HTML Format: {}", e))?;
+    }
+    if let Some(r) = rtf {
+        clipboard_win::raw::set_without_clear(cf_rtf, r)
+            .map_err(|e| format!("Failed to set Rich Text Format: {}", e))?;
+    }
+    Ok(())
 }
 
 /// 将图片写入剪切板。file_path 必须是经 storage_service::resolve_image_path
@@ -88,20 +162,38 @@ fn write_files_to_clipboard(paths: Vec<String>) -> Result<(), String> {
 
 /// 投递指定条目内容:按模式写入剪贴板,Paste 模式额外模拟 Ctrl+V。
 /// 调用前需先隐藏本应用窗口,确保按键落到目标应用上。
+/// html_path/rtf_path 非空且文件可读时,文本分支改走多格式原子写回;
+/// 文件缺失/读失败自动降级为纯文本,不报错中断粘贴。
 pub async fn deliver_content(
     app_handle: tauri::AppHandle,
     content: &str,
     item_type: i32,
     file_path: Option<&str>,
+    html_path: Option<&str>,
+    rtf_path: Option<&str>,
     mode: DeliverMode,
 ) -> Result<(), String> {
     let content = content.to_string();
     let file_path = file_path.map(|s| s.to_string());
+    let html_path = html_path.map(|s| s.to_string());
+    let rtf_path = rtf_path.map(|s| s.to_string());
     let do_paste = matches!(mode, DeliverMode::Paste);
     tokio::task::spawn_blocking(move || {
         let wrote = match item_type {
             t if t == ClipboardType::Text as i32 || t == ClipboardType::Link as i32 => {
-                write_text_if_changed(&content)?
+                // 先读格式文件:读不到(缺失/越界/IO 失败)则整体降级纯文本
+                let (html, rtf) =
+                    resolve_rich_formats(&app_handle, html_path.as_deref(), rtf_path.as_deref());
+                match choose_text_write_path(html.as_deref(), rtf.as_deref()) {
+                    // 带格式的条目每次都完整写回,不做"文本相同跳过"优化:
+                    // 剪贴板可能已被同文本的纯内容覆盖,跳过写入会把
+                    // 别人的内容顶包粘出去(这正是原 bug 的掩盖因素)
+                    TextWritePath::Rich => {
+                        write_rich_text_to_clipboard(&content, html.as_deref(), rtf.as_deref())?;
+                        true
+                    }
+                    TextWritePath::Plain => write_text_if_changed(&content)?,
+                }
             }
             t if t == ClipboardType::Image as i32 => {
                 let raw = file_path.as_deref().unwrap_or(&content);
@@ -236,15 +328,16 @@ pub async fn deliver_item_by_id(
     suppress_ms: u64,
 ) -> Result<Delivery, String> {
     let db = app_handle.state::<SqlitePool>();
-    let row = sqlx::query_as::<_, (String, i32, Option<String>)>(
-        "SELECT content, type, file_path FROM items WHERE id = ?",
-    )
+    let row = sqlx::query_as::<
+       _,
+        (String, i32, Option<String>, Option<String>, Option<String>),
+    >("SELECT content, type, file_path, html_path, rtf_path FROM items WHERE id = ?")
     .bind(id)
     .fetch_optional(&*db)
     .await
     .map_err(|e| e.to_string())?;
 
-    let (content, item_type, file_path) = match row {
+    let (content, item_type, file_path, html_path, rtf_path) = match row {
         Some(row) => row,
         None => return Ok(Delivery::Missing),
     };
@@ -273,8 +366,16 @@ pub async fn deliver_item_by_id(
     } else {
         DeliverMode::CopyOnly
     };
-    let result =
-        deliver_content(app_handle.clone(), &content, item_type, file_path.as_deref(), mode).await;
+    let result = deliver_content(
+        app_handle.clone(),
+        &content,
+        item_type,
+        file_path.as_deref(),
+        html_path.as_deref(),
+        rtf_path.as_deref(),
+        mode,
+    )
+    .await;
 
     tokio::time::sleep(std::time::Duration::from_millis(suppress_ms)).await;
     monitor.set_suppress(false).await;
@@ -296,4 +397,83 @@ pub async fn deliver_item_by_id(
     }
 
     result.map(|()| Delivery::Delivered)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 多格式原子写回后,剪贴板上应能按字节读回 "HTML Format"/"Rich Text Format"。
+    /// 需要真实桌面会话(剪贴板 + 格式注册),在无头/CI 环境不可靠,标记 ignored;
+    /// 逻辑分支(降级、守卫)由纯逻辑单测覆盖。手动验收(必须单线程,
+    /// 多测试并行会抢占全局剪贴板互相污染):
+    /// cargo test -- --ignored --test-threads=1 services::paste_service
+    #[test]
+    #[ignore = "需要交互式桌面会话的真机剪贴板,CI/无头环境不可靠"]
+    fn clipboard_roundtrip_writes_all_formats() {
+        let text = "混排内容 roundtrip";
+        // 模拟 Word 写出的 CF_HTML:头部 + HTML 片段(原样字节)
+        let html: &[u8] = b"Version:0.9\r\nStartHTML:0000000105\r\n<html><body>rich</body></html>";
+        let rtf: &[u8] = b"{\\rtf1\\ansi rich}";
+
+        write_rich_text_to_clipboard(text, Some(html), Some(rtf)).expect("多格式写回应成功");
+
+        // 独立会话读回断言字节一致
+        let _clip = clipboard_win::Clipboard::new_attempts(10).expect("打开剪贴板");
+        let read_back = |name: &str| -> Vec<u8> {
+            let fmt = clipboard_win::raw::register_format(name).expect("注册格式");
+            clipboard_win::get(clipboard_win::formats::RawData(fmt.get())).expect("读回格式")
+        };
+        assert_eq!(read_back("HTML Format"), html.to_vec(), "HTML 字节必须无损往返");
+        assert_eq!(read_back("Rich Text Format"), rtf.to_vec(), "RTF 字节必须无损往返");
+        // 文本也必须在
+        let cb_text = arboard::Clipboard::new().unwrap().get_text().expect("读回文本");
+        assert_eq!(cb_text, text);
+    }
+
+    /// 纯文本写回应清掉扩展格式(empty 后只写文本),不残留 HTML Format。
+    /// 真机剪贴板测试,与上面的往返测试一样需单线程运行。
+    #[test]
+    #[ignore = "需要真机剪贴板"]
+    fn plain_text_write_leaves_formats_absent() {
+        write_rich_text_to_clipboard("纯文本", None, None).expect("写文本应成功");
+        let _clip = clipboard_win::Clipboard::new_attempts(10).expect("打开剪贴板");
+        let html_fmt = clipboard_win::raw::register_format("HTML Format");
+        if let Some(fmt) = html_fmt {
+            assert!(
+                !clipboard_win::is_format_avail(fmt.get()),
+                "纯文本写回不应携带 HTML Format"
+            );
+        }
+    }
+
+    // ---------- 降级决策(纯逻辑) ----------
+
+    /// html/rtf 文件都读不到(丢失/越界/IO 失败)→ 降级纯文本路径,不 panic
+    #[test]
+    fn degrade_to_plain_when_format_files_missing() {
+        assert_eq!(choose_text_write_path(None, None), TextWritePath::Plain);
+    }
+
+    /// 只剩一种格式文件可读 → 仍走多格式写回(带可用的那种)
+    #[test]
+    fn rich_path_when_only_html_survives() {
+        assert_eq!(
+            choose_text_write_path(Some(b"<b>x</b>"), None),
+            TextWritePath::Rich
+        );
+        assert_eq!(
+            choose_text_write_path(None, Some(b"{\\rtf1}")),
+            TextWritePath::Rich
+        );
+    }
+
+    /// 两种都可用 → 多格式写回
+    #[test]
+    fn rich_path_when_both_formats_available() {
+        assert_eq!(
+            choose_text_write_path(Some(b"<b>x</b>"), Some(b"{\\rtf1}")),
+            TextWritePath::Rich
+        );
+    }
 }
