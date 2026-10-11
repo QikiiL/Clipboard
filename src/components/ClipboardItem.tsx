@@ -3,6 +3,7 @@ import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { useClipboardStore } from '../stores/clipboardStore';
 import { useContinuousPasteStore } from '../stores/continuousPasteStore';
 import { dbTimeToDate, formatBytes } from '../lib/format';
+import { buildRichPreviewSrcDoc } from '../lib/richPreview';
 import type { ClipboardItem as ClipboardItemType, ClipboardType } from '../types/clipboard';
 import { ClipboardType as CT } from '../types/clipboard';
 import {
@@ -28,6 +29,24 @@ async function fetchAssetSize(url: string): Promise<number | null> {
     const resp = await fetch(url);
     if (!resp.ok) return null;
     return (await resp.blob()).size;
+  } catch {
+    return null;
+  }
+}
+
+// 悬停气泡的富文本片段缓存:同一条目反复悬停不重复走 IPC + 文件读取。
+// 取舍:items.id 是 INTEGER PRIMARY KEY AUTOINCREMENT(永不复用),按 id
+// 缓存不会串条目;条目被编辑保存后 html_path 置 NULL,气泡按 html_path
+// 门禁直接退回纯文本,不会读到过期片段。只缓存成功结果,失败下次还能重试。
+const richPreviewCache = new Map<number, string | null>();
+
+async function fetchRichPreview(id: number): Promise<string | null> {
+  if (richPreviewCache.has(id)) return richPreviewCache.get(id) ?? null;
+  try {
+    const res = await invoke<{ html: string | null }>('get_rich_preview', { id });
+    const html = res?.html ?? null;
+    richPreviewCache.set(id, html);
+    return html;
   } catch {
     return null;
   }
@@ -114,6 +133,11 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
     { left: number; top: number; flipUp: boolean; maxHeight: number } | null
   >(null);
   const tipCloseTimer = useRef<number | undefined>(undefined);
+  // 气泡里的富文本片段:连 id 一起存,换条目时旧片段立即失效。
+  // 未到位时气泡仍是纯文本(渐进增强,不阻塞 hover)
+  const [tipRich, setTipRich] = useState<{ id: number; html: string | null } | null>(null);
+  // 请求序号:气泡关闭或换条目时推进,晚到的响应据此丢弃
+  const tipRichReq = useRef(0);
   const groups = useClipboardStore((s) => s.groups);
   // 连续粘贴(框选模式):选中态用明显的包围框描边 + 粘贴顺序徽标,
   // 已粘贴条目整体变淡并打勾。store 为空映射/空集合时全部为默认值,
@@ -126,6 +150,14 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
   const boxUsed = useContinuousPasteStore((s) => s.pastedIds.has(item.id));
 
   useEffect(() => () => window.clearTimeout(tipCloseTimer.current), []);
+
+  // 组件是 memo 的,虚拟列表会用同一个实例渲染另一行:item 变化时
+  // 丢掉上一条的片段并作废在途请求。html_path 也要进依赖 —— 条目被
+  // 编辑保存后 id 不变但富格式已清空,缓存里的旧片段必须一起失效
+  useEffect(() => {
+    setTipRich(null);
+    tipRichReq.current += 1;
+  }, [item.id, item.html_path]);
 
   const handleEyeEnter = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     window.clearTimeout(tipCloseTimer.current);
@@ -146,14 +178,33 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
       Math.min(window.innerHeight * 0.45, flipUp ? spaceAbove : spaceBelow),
     );
     setContentTip({ left, top: flipUp ? rect.top - GAP : rect.bottom + GAP, flipUp, maxHeight });
-  }, []);
+
+    // 富格式条目:顺手拉净化片段,到位后气泡换成图文 iframe;
+    // 无 html_path / 拉取失败 / 拉取中,气泡都维持现有纯文本形态
+    if (!item.html_path) return;
+    const seq = ++tipRichReq.current;
+    void fetchRichPreview(item.id).then((html) => {
+      // 气泡已关闭、已换条目或又发起了新请求 → 丢弃这次响应
+      if (tipRichReq.current !== seq) return;
+      setTipRich({ id: item.id, html });
+    });
+  }, [item.id, item.html_path]);
 
   // 离开按钮后延迟一小段再关,给鼠标移进气泡留出时间差
   const handleEyeLeave = useCallback(() => {
     window.clearTimeout(tipCloseTimer.current);
-    tipCloseTimer.current = window.setTimeout(() => setContentTip(null), 120);
+    tipCloseTimer.current = window.setTimeout(() => {
+      setContentTip(null);
+      // 气泡关闭后到达的响应一律作废
+      tipRichReq.current += 1;
+    }, 120);
   }, []);
   const cancelTipClose = useCallback(() => window.clearTimeout(tipCloseTimer.current), []);
+
+  // 只渲染当前条目的片段(虚拟列表复用实例时旧片段立刻失效);
+  // 再压一道 html_path 门禁:富格式被清空后即使状态还没清也不显示旧图文
+  const tipRichHtml =
+    tipRich && tipRich.id === item.id && item.html_path ? tipRich.html : null;
 
   const handleMouseEnter = useCallback((e: React.MouseEvent) => {
     setMousePos({ x: e.clientX, y: e.clientY });
@@ -403,14 +454,26 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
           onMouseLeave={handleEyeLeave}
           onClick={(e) => e.stopPropagation()}
         >
-          <div
-            className="bg-surface rounded-lg shadow-dialog border border-hairline px-3 py-2 max-w-[320px] overflow-y-auto"
-            style={{ maxHeight: contentTip.maxHeight }}
-          >
-            <p className="text-[12.5px] leading-relaxed text-ink whitespace-pre-wrap break-words select-text">
-              {item.content}
-            </p>
-          </div>
+          {tipRichHtml ? (
+            // 富文本气泡:高度固定一档、滚动交给 iframe 自身;外层不再
+            // overflow-y-auto,否则会出现内外双滚动条。
+            // srcDoc 与弹窗共用 lib/richPreview(同款 CSP + 字号/图片样式)
+            <iframe
+              title="富文本预览"
+              sandbox=""
+              srcDoc={buildRichPreviewSrcDoc(tipRichHtml)}
+              className="block w-[320px] h-[200px] rounded-lg shadow-dialog border border-hairline bg-white"
+            />
+          ) : (
+            <div
+              className="bg-surface rounded-lg shadow-dialog border border-hairline px-3 py-2 max-w-[320px] overflow-y-auto"
+              style={{ maxHeight: contentTip.maxHeight }}
+            >
+              <p className="text-[12.5px] leading-relaxed text-ink whitespace-pre-wrap break-words select-text">
+                {item.content}
+              </p>
+            </div>
+          )}
         </div>
       )}
       {groupMenuOpen && (

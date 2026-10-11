@@ -1,0 +1,50 @@
+import { describe, it, expect } from 'vitest';
+import { buildRichPreviewSrcDoc } from '../richPreview';
+
+// 弹窗(ContentEditorDialog)与悬停气泡(ClipboardItem)共用这一份 srcDoc,
+// 所以样式与 CSP 的回归都锁在这里
+describe('buildRichPreviewSrcDoc', () => {
+  const doc = buildRichPreviewSrcDoc('<p>你好</p>');
+
+  it('embeds the sanitized fragment verbatim', () => {
+    expect(doc).toContain('<p>你好</p>');
+  });
+
+  it('aligns with the plain-text editor metrics (13px / leading-relaxed)', () => {
+    expect(doc).toContain('font-size:13px');
+    expect(doc).toContain('line-height:1.625');
+  });
+
+  it('forces images to scale down instead of keeping hardcoded sizes', () => {
+    // 三条都必须带 !important:源 HTML 的内联 style(max-width:none、
+    // height:300px)只有 !important 才压得住,否则超宽图片仍会撑破布局
+    expect(doc).toContain('max-width:100% !important');
+    expect(doc).toContain('height:auto !important');
+    expect(doc).toContain('max-height:100% !important');
+  });
+
+  it('overrides per-element font metrics coming from the source HTML', () => {
+    // 剪贴板富文本普遍自带内联字号(Word/Outlook 的 12pt≈16px),
+    // 子元素必须被强制继承 body 的 13px/1.625,否则字号跟着源走,
+    // 与纯文本视图对不齐。正则锚在 body * 规则内,声明顺序无关
+    expect(doc).toMatch(/body \*\{[^}]*font-size:inherit !important/);
+    expect(doc).toMatch(/body \*\{[^}]*line-height:inherit !important/);
+  });
+
+  it('keeps a fragment with inline font-size but still flattens it', () => {
+    const withInline = buildRichPreviewSrcDoc('<span style="font-size:12.0pt">正文</span>');
+    // 片段原样内嵌(净化在前端之前已完成),压平靠 CSS 规则
+    expect(withInline).toContain('<span style="font-size:12.0pt">正文</span>');
+    expect(withInline).toMatch(/body \*\{[^}]*font-size:inherit !important/);
+  });
+
+  it('wraps overlong words instead of letting them burst the frame', () => {
+    expect(doc).toContain('overflow-wrap:anywhere');
+  });
+
+  it('keeps the strict CSP: only inline styles and inline data images', () => {
+    expect(doc).toContain("default-src 'none'");
+    expect(doc).toContain('img-src data:');
+    expect(doc).toContain("style-src 'unsafe-inline'");
+  });
+});

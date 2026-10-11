@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { ClipboardItem as ClipboardItemType } from '../types/clipboard';
+import { buildRichPreviewSrcDoc } from '../lib/richPreview';
 import { CopyIcon, XIcon, CheckIcon } from './icons';
 
 /** 查看 / 编辑条目的完整内容。item 为 null 时不渲染;
@@ -18,6 +19,10 @@ export function ContentEditorDialog({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // 富文本预览:后端返回净化后的 CF_HTML 片段。连 id 一起存,
+  // 换条目时旧片段立刻失效,不会先渲染上一条的图文再被替换
+  const [rich, setRich] = useState<{ id: number; html: string | null } | null>(null);
+  const [view, setView] = useState<'rich' | 'plain'>('plain');
   const areaRef = useRef<HTMLTextAreaElement>(null);
   const copyTimer = useRef<number | undefined>(undefined);
 
@@ -29,8 +34,34 @@ export function ContentEditorDialog({
     setCopied(false);
     setError(null);
     setSaving(false);
+    setRich(null);
     // 聚焦但不全选:全选会让用户随手输入就覆盖原内容
     areaRef.current?.focus();
+
+    // 无富格式(html_path 为空)的条目:维持原有的纯文本行为,不显示切换
+    if (!item.html_path) {
+      setView('plain');
+      return;
+    }
+    // 带富格式:默认打开富文本视图;片段拉不到(文件缺失/守卫拒绝/解析失败)
+    // 就退回纯文本,同样不显示切换
+    setView('rich');
+    let cancelled = false;
+    invoke<{ html: string | null }>('get_rich_preview', { id: item.id })
+      .then((res) => {
+        if (cancelled) return;
+        const html = res?.html ?? null;
+        setRich({ id: item.id, html });
+        if (!html) setView('plain');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRich({ id: item.id, html: null });
+        setView('plain');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [item]);
 
   // Esc 关闭。挂在 window 上而非面板上,保证焦点在 textarea 内也能命中
@@ -52,6 +83,16 @@ export function ContentEditorDialog({
   }, []);
 
   const hasSelection = selection.end > selection.start;
+
+  // 当前条目的富文本片段(带 id 校验:换条目后旧片段立即失效)
+  const richHtml = item && rich?.id === item.id ? rich.html : null;
+  // 有 html_path 但结果还没回来
+  const richLoading = Boolean(item?.html_path) && rich?.id !== item?.id;
+  // 只有真拿到片段才显示切换,拿不到就当普通纯文本条目
+  const showTabs = richHtml !== null;
+  const showRichView = showTabs && view === 'rich';
+  // 「复制选中」只服务纯文本 textarea;富文本的复制走主列表点击粘贴
+  const canCopy = hasSelection && !showRichView;
 
   const handleCopy = async () => {
     const el = areaRef.current;
@@ -116,16 +157,57 @@ export function ContentEditorDialog({
         {/* min-h + overflow-y-auto:极矮窗口下 textarea 的 160px 下限可能
             撑破面板 88vh 上限,让内容区自己滚动,保证底部按钮永远可见 */}
         <div className="px-5 py-4 flex-1 min-h-0 overflow-y-auto">
-          <textarea
-            ref={areaRef}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onSelect={syncSelection}
-            onKeyUp={syncSelection}
-            onMouseUp={syncSelection}
-            onCopy={handleNativeCopy}
-            className="w-full h-[46vh] min-h-[160px] px-3 py-2 rounded-[10px] border border-hairline bg-app text-[13px] leading-relaxed text-ink outline-none resize-none overflow-y-auto focus:border-accent focus:ring-[3px] focus:ring-accent-ring transition-[border-color,box-shadow] duration-150"
-          />
+          {showTabs && (
+            <div className="flex items-center gap-4 mb-3 border-b border-hairline">
+              {(['rich', 'plain'] as const).map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  className={`-mb-px h-[26px] text-[12.5px] whitespace-nowrap border-b-2 transition-colors duration-150 ${
+                    view === v
+                      ? 'text-accent border-accent'
+                      : 'text-faint border-transparent hover:text-muted'
+                  }`}
+                >
+                  {v === 'rich' ? '富文本' : '纯文本'}
+                </button>
+              ))}
+            </div>
+          )}
+          {richLoading ? (
+            <div className="w-full h-[46vh] min-h-[160px] rounded-[10px] border border-hairline bg-app flex items-center justify-center text-[12.5px] text-faint">
+              正在载入富文本…
+            </div>
+          ) : showRichView ? (
+            // sandbox="" 空值 = 最严沙箱:禁脚本/禁同源/禁表单/禁弹窗/禁顶层导航。
+            // srcDoc(内联 CSP + 字号/图片样式)与悬停气泡共用
+            // lib/richPreview.buildRichPreviewSrcDoc,两处样式不会漂移。
+            // 绝不把片段直接 dangerouslySetInnerHTML 进主文档。
+            <iframe
+              title="富文本预览"
+              sandbox=""
+              srcDoc={buildRichPreviewSrcDoc(richHtml)}
+              className="w-full h-[46vh] min-h-[160px] rounded-[10px] border border-hairline bg-white"
+            />
+          ) : (
+            <>
+              {showTabs && (
+                <p className="mb-2 text-[11.5px] text-faint">
+                  编辑并保存纯文本将丢弃富文本格式(含图片),粘贴将退化为纯文本
+                </p>
+              )}
+              <textarea
+                ref={areaRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onSelect={syncSelection}
+                onKeyUp={syncSelection}
+                onMouseUp={syncSelection}
+                onCopy={handleNativeCopy}
+                className="w-full h-[46vh] min-h-[160px] px-3 py-2 rounded-[10px] border border-hairline bg-app text-[13px] leading-relaxed text-ink outline-none resize-none overflow-y-auto focus:border-accent focus:ring-[3px] focus:ring-accent-ring transition-[border-color,box-shadow] duration-150"
+              />
+            </>
+          )}
           {error && <p className="mt-2 text-[11.5px] text-danger">{error}</p>}
         </div>
 
@@ -152,9 +234,9 @@ export function ContentEditorDialog({
           <div className="flex items-center justify-end gap-2 mt-3">
             <button
               onClick={() => void handleCopy()}
-              disabled={!hasSelection}
+              disabled={!canCopy}
               className={`flex items-center gap-1.5 h-[31px] px-3 text-[12.5px] whitespace-nowrap rounded-[10px] transition-colors duration-150 ${
-                hasSelection
+                canCopy
                   ? 'text-muted hover:bg-app'
                   : 'text-faint cursor-not-allowed'
               }`}
