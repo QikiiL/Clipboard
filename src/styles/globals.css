@@ -23,6 +23,12 @@
   --lift: 0 1px 2px oklch(20% 0.02 260 / 0.05), 0 3px 10px oklch(20% 0.02 260 / 0.07);
   --lift-hover: 0 1px 3px oklch(20% 0.02 260 / 0.07), 0 5px 16px oklch(20% 0.02 260 / 0.09);
   --dialog-shadow: 0 24px 64px oklch(15% 0.02 260 / 0.22);
+  /* 三风格补齐:浮笺只给等价值,浮笺自己的规则不引用它们(方案 §1.3) */
+  --radius: 10px;
+  --surface-2: oklch(95.5% 0.004 260);
+  --hover: oklch(96.5% 0.003 260);
+  --sel: oklch(94.5% 0.028 258);
+  --sel-paste: oklch(90% 0.05 258);
 }
 
 /* 深色:阴影不可见,浮起改为描边承担 */
@@ -48,6 +54,11 @@
   --lift: inset 0 0 0 1px oklch(30% 0.008 260);
   --lift-hover: inset 0 0 0 1px oklch(32% 0.008 260);
   --dialog-shadow: 0 24px 64px oklch(8% 0.01 260 / 0.6);
+  /* 同上:--radius 继承 :root 的 10px,这里只覆盖面/态色 */
+  --surface-2: oklch(28% 0.008 260);
+  --hover: oklch(27% 0.008 260);
+  --sel: oklch(30% 0.055 258);
+  --sel-paste: oklch(34% 0.07 258);
 }
 
 @theme inline {
@@ -68,6 +79,11 @@
   --color-danger: var(--danger);
   --color-danger-deep: var(--danger-deep);
   --color-on-accent: var(--on-accent);
+  /* 三风格新增映射(--radius 不进 @theme:避免与 --radius-* 命名空间混淆) */
+  --color-surface-2: var(--surface-2);
+  --color-hover: var(--hover);
+  --color-sel: var(--sel);
+  --color-sel-paste: var(--sel-paste);
   --shadow-lift: var(--lift);
   --shadow-lift-hover: var(--lift-hover);
   --shadow-dialog: var(--dialog-shadow);
