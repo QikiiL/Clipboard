@@ -9,6 +9,7 @@ import { XIcon, ResetIcon } from './icons';
 import { PromptDialog } from './Dialogs';
 import { parseUpdateNotes, type UpdateInfo } from './UpdateDialog';
 import { openUrl } from '../lib/openUrl';
+import { UI_STYLES } from '../lib/uiStyle';
 import {
   Switch,
   Stepper,
@@ -83,7 +84,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
   // savedRef 持有最近一次已持久化的值,用于判断数字输入是否真的改了
   const savedRef = useRef<AppSettings>(DEFAULT_SETTINGS);
   const recordingRef = useRef<HotkeyField | null>(null);
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, style, setStyle } = useTheme();
   const setPaused = useClipboardStore((s) => s.setPaused);
 
   // 豁免名单条数。后端 AppSettings 对该字段带 serde default,
@@ -433,6 +434,32 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
             <Row title="深色模式">
               <Switch checked={theme === 'dark'} onChange={toggleTheme} label="深色模式" />
             </Row>
+            {/* 界面风格:即选即生效(只改 state,effect 写 dataset + localStorage,不调 invoke) */}
+            <div className="px-3.5 py-[11px]">
+              <div className="text-[12.5px] font-medium">界面风格</div>
+              <p className="mt-[2px] text-[11px] text-faint">即选即生效；浮笺为默认</p>
+              <div
+                role="radiogroup"
+                aria-label="界面风格"
+                className="flex mt-2 gap-[3px] p-[3px] rounded-[10px] bg-app"
+              >
+                {UI_STYLES.map((s) => (
+                  <button
+                    key={s.value}
+                    role="radio"
+                    aria-checked={style === s.value}
+                    onClick={() => setStyle(s.value)}
+                    className={`flex-1 h-[26px] text-[11.5px] rounded-[7px] transition-[background-color,color,box-shadow] duration-150 ${
+                      style === s.value
+                        ? 'bg-surface text-accent font-semibold shadow-lift'
+                        : 'text-muted hover:text-faint'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </Card>
 
           {/* 通用 */}
