@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 const overlayClass = 'fixed inset-0 z-[60] flex items-center justify-center bg-black/50';
 const panelClass =
-  'bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-xs mx-4 overflow-hidden';
+  'clip-dialog bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-xs mx-4 overflow-hidden';
 
 /** 输入型对话框:替代 WebView2 下渲染残缺的原生 window.prompt */
 export function PromptDialog({

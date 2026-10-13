@@ -142,7 +142,7 @@ export function ContentEditorDialog({
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 clip-fade-in"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-[560px] mx-4 overflow-hidden flex flex-col max-h-[88vh] clip-pop-in">
+      <div className="clip-dialog bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-[560px] mx-4 overflow-hidden flex flex-col max-h-[88vh] clip-pop-in">
         <div className="flex items-center justify-between px-5 pt-3.5 pb-3 border-b border-hairline">
           <h3 className="text-sm font-semibold">查看 / 编辑内容</h3>
           <button

@@ -187,6 +187,14 @@ html[data-style="mist"].dark {
   --font-sans: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'PingFang SC', system-ui, sans-serif;
 }
 
+/* ④ 组件差异:先 A 段(瑞士索引)、再 C 段(雾绿工作台),一律写成 html[data-style=…] 前缀。
+   本段目前只有"默认态"(= 浮笺)规则 —— 浮笺不引用任何 hook,故 hook class 本身零视觉影响;
+   A/C 两段分别在后续提交追加。 */
+
+/* 行内序号栏:默认隐藏(= 浮笺现状,零视觉变化)。A 段 34px 等宽数字 / C 段窄号各自启用,
+   由 §3.5 的 index prop 渲染、.clip-row[data-selected] 着色 */
+.clip-idx { display: none; }
+
 /* 面板宽度自适应断点(容器查询)。面板宽度只有 370~600px,
    1366/1920/3840 之类的视口断点永远不会触发,故按“面板自身宽度”分三档:
    窄 < 22.5rem(360px) / 标准 / 宽 ≥ 32.5rem(520px)。

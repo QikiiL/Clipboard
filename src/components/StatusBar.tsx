@@ -145,7 +145,7 @@ export function StatusBar() {
   }, []);
 
   return (
-    <div className="flex items-center justify-between h-9 px-4 border-t border-hairline text-[11px] text-faint tabular-nums gap-3 @max-narrow:h-8 @max-narrow:px-2.5 @max-narrow:text-[10px] @min-wide:h-10 @min-wide:px-5 @min-wide:text-[12px]">
+    <div className="clip-statusbar flex items-center justify-between h-9 px-4 border-t border-hairline text-[11px] text-faint tabular-nums gap-3 @max-narrow:h-8 @max-narrow:px-2.5 @max-narrow:text-[10px] @min-wide:h-10 @min-wide:px-5 @min-wide:text-[12px]">
       {/* 左:统计。文本不换行(nowrap),容器 min-w-0+overflow-hidden
           允许窗口极窄时被裁剪。dbSize/appVersion 是次要信息,窄屏隐藏。
           右:粘贴模式+状态。flex-shrink-0 防止按钮被压成两行 */}

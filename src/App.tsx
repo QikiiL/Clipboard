@@ -164,10 +164,10 @@ function AppContent() {
     'flex items-center justify-center w-[30px] h-[30px] rounded-lg text-muted hover:bg-hairline hover:text-faint transition-colors @max-narrow:w-[26px] @max-narrow:h-[26px]';
 
   return (
-    <div className="@container flex flex-col h-screen bg-app text-ink">
+    <div className="@container clip-panel flex flex-col h-screen bg-app text-ink">
       <header
         data-tauri-drag-region
-        className="flex items-center justify-between h-[46px] pl-5 pr-1.5 border-b border-hairline select-none @max-narrow:h-[40px] @max-narrow:pl-3 @max-narrow:pr-1 @min-wide:h-[52px] @min-wide:pl-6"
+        className="clip-titlebar flex items-center justify-between h-[46px] pl-5 pr-1.5 border-b border-hairline select-none @max-narrow:h-[40px] @max-narrow:pl-3 @max-narrow:pr-1 @min-wide:h-[52px] @min-wide:pl-6"
       >
         <h1 data-tauri-drag-region className="text-[13px] font-semibold tracking-wide cursor-default @max-narrow:text-[12px] @min-wide:text-[14px]">
           剪贴板

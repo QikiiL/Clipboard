@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { STYLE_KEY, UI_STYLES, normalizeStyle, readStoredStyle } from '../uiStyle';
+import { STYLE_KEY, UI_STYLES, normalizeStyle, readStoredStyle, rowEstimate } from '../uiStyle';
 
 describe('normalizeStyle', () => {
   it('三个合法风格 id 原样返回', () => {
@@ -51,6 +51,23 @@ describe('readStoredStyle', () => {
     expect(readStoredStyle()).toBe('swiss');
     localStorage.removeItem(STYLE_KEY);
     expect(readStoredStyle()).toBe('fuji');
+  });
+});
+
+describe('rowEstimate', () => {
+  it('浮笺沿用现状 55(默认态零变化的前提)', () => {
+    expect(rowEstimate('fuji')).toBe(55);
+  });
+
+  it('瑞士索引 52 / 雾绿工作台 72(60 行高 + 12 行间隙)', () => {
+    expect(rowEstimate('swiss')).toBe(52);
+    expect(rowEstimate('mist')).toBe(72);
+  });
+
+  it('每个风格 id 都有估计值,且互不相同', () => {
+    const values = UI_STYLES.map((s) => rowEstimate(s.value));
+    expect(values.every((v) => typeof v === 'number' && v > 0)).toBe(true);
+    expect(new Set(values).size).toBe(UI_STYLES.length);
   });
 });
 

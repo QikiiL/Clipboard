@@ -39,8 +39,8 @@ export function SearchBar() {
   }, []);
 
   return (
-    <div className="px-4 pt-3 pb-2.5 @max-narrow:px-2.5 @max-narrow:pt-2 @max-narrow:pb-2 @min-wide:px-5 @min-wide:pt-3.5 @min-wide:pb-3">
-      <div className="flex items-center gap-2 h-9 rounded-[10px] bg-surface border border-hairline px-3 text-faint transition-[border-color,box-shadow] duration-150 focus-within:border-accent focus-within:ring-[3px] focus-within:ring-accent-ring @max-narrow:h-8 @max-narrow:px-2.5 @min-wide:h-10 @min-wide:px-3.5">
+    <div className="clip-searchrow px-4 pt-3 pb-2.5 @max-narrow:px-2.5 @max-narrow:pt-2 @max-narrow:pb-2 @min-wide:px-5 @min-wide:pt-3.5 @min-wide:pb-3">
+      <div className="clip-searchbox flex items-center gap-2 h-9 rounded-[10px] bg-surface border border-hairline px-3 text-faint transition-[border-color,box-shadow] duration-150 focus-within:border-accent focus-within:ring-[3px] focus-within:ring-accent-ring @max-narrow:h-8 @max-narrow:px-2.5 @min-wide:h-10 @min-wide:px-3.5">
         <SearchIcon size={14} />
         <input
           ref={inputRef}

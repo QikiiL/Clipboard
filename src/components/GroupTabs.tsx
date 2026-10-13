@@ -62,15 +62,17 @@ export function GroupTabs() {
   return (
     <>
       <div className="px-4 pt-1 pb-3 @max-narrow:px-2.5 @max-narrow:pb-2 @min-wide:px-5 @min-wide:pb-3.5">
-      <div className="tabs-scroll flex items-center gap-[3px] p-[3px] rounded-full bg-surface border border-hairline overflow-x-auto">
+      <div className="clip-tabs tabs-scroll flex items-center gap-[3px] p-[3px] rounded-full bg-surface border border-hairline overflow-x-auto">
         <button
           onClick={handleShowAll}
+          data-selected={!showFavorites && selectedGroup === null}
           className={!showFavorites && selectedGroup === null ? tabActive : tabIdle}
         >
           全部
         </button>
         <button
           onClick={handleShowFavorites}
+          data-selected={showFavorites}
           className={showFavorites ? tabActive : tabIdle}
         >
           <span className="text-star"><StarIcon size={13} /></span>
@@ -84,6 +86,7 @@ export function GroupTabs() {
               e.preventDefault();
               setMenu({ group, x: e.clientX, y: e.clientY });
             }}
+            data-selected={selectedGroup?.id === group.id}
             className={selectedGroup?.id === group.id ? tabActive : tabIdle}
           >
             {group.icon} {group.name}

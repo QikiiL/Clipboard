@@ -24,3 +24,15 @@ export function normalizeStyle(v: string | null): UiStyle {
 export function readStoredStyle(): UiStyle {
   return normalizeStyle(localStorage.getItem(STYLE_KEY));
 }
+
+/**
+ * 虚拟列表的行高估计(px)。浮笺保持现状 55;A 瑞士索引行高 52(方案 §3.3);
+ * C 雾绿工作台 60 + 12px 行间隙 = 72。
+ * 只是"估计":真实行高仍由 measureElement 量出,风格切换后由调用方
+ * virtualizer.measure() 重算,否则已滚动的长列表会按旧估计错位。
+ */
+const ROW_ESTIMATE: Record<UiStyle, number> = { fuji: 55, swiss: 52, mist: 72 };
+
+export function rowEstimate(style: UiStyle): number {
+  return ROW_ESTIMATE[style];
+}

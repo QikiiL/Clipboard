@@ -54,6 +54,8 @@ async function fetchRichPreview(id: number): Promise<string | null> {
 
 interface Props {
   item: ClipboardItemType;
+  /** 1 起的列表序号:仅 A/C 风格用 CSS 显示(.clip-idx 默认 display:none) */
+  index: number;
   onActivate: (item: ClipboardItemType) => void;
   onDelete: (id: number) => void;
   onToggleFavorite: (id: number) => void;
@@ -100,6 +102,7 @@ function formatTime(dateStr: string): string {
 
 export const ClipboardItemCard = memo(function ClipboardItemCard({
   item,
+  index,
   onActivate,
   onDelete,
   onToggleFavorite,
@@ -339,7 +342,9 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
 
   return (
     <div
-      className={`group relative flex items-center gap-2.5 min-h-[52px] p-[10px] rounded-[10px] cursor-pointer border border-transparent transition-[background-color,border-color] duration-150 hover:bg-surface hover:border-hairline @max-narrow:gap-2 @max-narrow:min-h-[46px] @max-narrow:p-2 @min-wide:gap-3 @min-wide:min-h-[60px] @min-wide:p-3 ${
+      data-selected={boxSelected || undefined}
+      data-pasted={boxUsed || undefined}
+      className={`group clip-row relative flex items-center gap-2.5 min-h-[52px] p-[10px] rounded-[10px] cursor-pointer border border-transparent transition-[background-color,border-color] duration-150 hover:bg-surface hover:border-hairline @max-narrow:gap-2 @max-narrow:min-h-[46px] @max-narrow:p-2 @min-wide:gap-3 @min-wide:min-h-[60px] @min-wide:p-3 ${
         boxSelected ? 'ring-2 ring-accent bg-accent-soft/50' : ''
       } ${boxMode && boxUsed ? 'opacity-50' : ''}`}
       onClick={(e) => {
@@ -356,8 +361,10 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
         onActivate(item);
       }}
     >
+      {/* 序号栏:浮笺下 display:none(globals.css 的默认规则),A/C 段才显示 */}
+      <span className="clip-idx" aria-hidden="true">{String(index).padStart(2, '0')}</span>
       {!(isImage && imageSrc && !imageFailed) && (
-        <div className="flex-shrink-0 flex items-center justify-center w-[26px] text-faint">
+        <div className="clip-ico flex-shrink-0 flex items-center justify-center w-[26px] text-faint">
           {(() => {
             const TypeIcon = typeIcons[item.type];
             return <TypeIcon size={14} />;
@@ -396,8 +403,8 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
           {formatTime(item.last_used_at)}
         </span>
         {!boxMode && (
-          <div className="flex items-center pl-2 w-0 overflow-hidden group-hover:w-[118px] group-focus-within:w-[118px] transition-[width] duration-150 ease-out @max-narrow:pl-1 @max-narrow:group-hover:w-[98px] @max-narrow:group-focus-within:w-[98px] @min-wide:group-hover:w-[130px] @min-wide:group-focus-within:w-[130px]">
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150">
+          <div className="clip-actions-wrap flex items-center pl-2 w-0 overflow-hidden group-hover:w-[118px] group-focus-within:w-[118px] transition-[width] duration-150 ease-out @max-narrow:pl-1 @max-narrow:group-hover:w-[98px] @max-narrow:group-focus-within:w-[98px] @min-wide:group-hover:w-[130px] @min-wide:group-focus-within:w-[130px]">
+          <div className="clip-actions flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150">
             {!isImage && (
               <button
                 onMouseDown={(e) => e.preventDefault()}

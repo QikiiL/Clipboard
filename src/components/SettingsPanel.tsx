@@ -409,7 +409,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-md mx-4 max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="clip-dialog bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-md mx-4 max-h-[90vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-[18px] pt-[15px] pb-[13px]">
           <h2 className="text-[14.5px] font-semibold tracking-[0.01em]">
             设置

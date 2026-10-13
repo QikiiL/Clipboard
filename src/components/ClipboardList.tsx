@@ -9,6 +9,8 @@ import { ghostBtn } from './settings-controls';
 import { invoke } from '@tauri-apps/api/core';
 import type { ClipboardItem as ClipboardItemType } from '../types/clipboard';
 import { useRubberBandSelect } from '../hooks/useRubberBandSelect';
+import { useTheme } from '../contexts/ThemeContext';
+import { rowEstimate } from '../lib/uiStyle';
 
 export function ClipboardList() {
   const { items, isLoading } = useClipboardStore();
@@ -31,13 +33,23 @@ export function ClipboardList() {
 
   // 虚拟滚动:只渲染可视区附近的行,长列表下 DOM 节点数与内存恒定。
   // 行用 top 定位(非 transform),行内 position:fixed 的悬停预览与菜单遮罩才能相对视口定位。
+  // estimateSize 只是"未量到的行"的估计值:按当前界面风格取常数(浮笺 55 保持现状),
+  // 真实行高仍由 measureElement 量出
+  const { style } = useTheme();
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 55,
+    estimateSize: () => rowEstimate(style),
     overscan: 6,
     getItemKey: (index) => items[index].id,
   });
+
+  // 风格切换会改变行高(A 52 / C 72):不重算的话,已滚动的长列表仍按旧估计
+  // 定位行与滚动条长度 → 跳变/错位。measure() 清空已量尺寸,重渲染时由
+  // measureElement 重新量出真实行高
+  useEffect(() => {
+    virtualizer.measure();
+  }, [style, virtualizer]);
 
   // 框选模式下条目增删会改变显示顺序,粘贴序号徽标需重算
   useEffect(() => {
@@ -137,7 +149,7 @@ export function ClipboardList() {
                 desc: '复制内容后将自动出现在这里',
               };
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-faint px-6">
+      <div className="clip-empty flex-1 flex flex-col items-center justify-center text-faint px-6">
         {empty.icon}
         <p className="mt-3 text-[13px] text-center break-all max-w-[300px]">{empty.title}</p>
         <p className="mt-1 text-[12px] text-center">{empty.desc}</p>
@@ -150,7 +162,7 @@ export function ClipboardList() {
     <>
       <div
         ref={scrollRef}
-        className={`flex-1 overflow-y-auto px-3 pt-1 pb-2.5 @max-narrow:px-2 @min-wide:px-4 ${
+        className={`clip-list flex-1 overflow-y-auto px-3 pt-1 pb-2.5 @max-narrow:px-2 @min-wide:px-4 ${
           bandEnabled ? 'cursor-crosshair' : ''
         }`}
         onClickCapture={(e) => {
@@ -170,11 +182,12 @@ export function ClipboardList() {
                 data-index={virtualRow.index}
                 data-item-id={item.id}
                 ref={virtualizer.measureElement}
-                className="pb-[3px]"
+                className="clip-row-wrap pb-[3px]"
                 style={{ position: 'absolute', top: virtualRow.start, left: 0, width: '100%' }}
               >
                 <ClipboardItemCard
                   item={item}
+                  index={virtualRow.index + 1}
                   onActivate={handleActivate}
                   onDelete={handleDelete}
                   onToggleFavorite={handleToggleFavorite}
