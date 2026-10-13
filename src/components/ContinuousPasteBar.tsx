@@ -114,7 +114,7 @@ export function ContinuousPasteBar() {
     <div className="px-3 pb-1.5 @min-wide:px-4">
       {/* flex-wrap:窗口窄到放不下「文字 + 按钮组」时,按钮组整体折到第二行,
           组内再放不下继续折 —— 绝不让按钮溢出圆角边框 */}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 min-h-9 px-2.5 py-1.5 rounded-[10px] bg-accent-soft ring-1 ring-inset ring-accent-ring text-[12px] min-w-0">
+      <div className="clip-continuous-bar flex flex-wrap items-center gap-x-2 gap-y-1.5 min-h-9 px-2.5 py-1.5 rounded-[10px] bg-accent-soft ring-1 ring-inset ring-accent-ring text-[12px] min-w-0">
         <LayersIcon size={14} className="text-accent shrink-0" aria-hidden />
 
         {!queueActive && !finished && (

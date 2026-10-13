@@ -195,6 +195,178 @@ html[data-style="mist"].dark {
    由 §3.5 的 index prop 渲染、.clip-row[data-selected] 着色 */
 .clip-idx { display: none; }
 
+/* ══ A · 瑞士索引 组件差异 ══════════════════════════════════════════════════
+   值逐字照抄 preview §⑤ A 段(行 132–150)与方案 §3.3/§3.4,选择器前缀统一为
+   html[data-style="swiss"](0,2,1)。
+
+   为什么 0,2,1 就够:本段所有规则都写在 @layer 之外,而未分层的规则在层叠中
+   恒胜 @layer utilities 里的工具类(与优先级无关);容器查询也不改变优先级,
+   所以 @min-wide:min-h-[60px] / @min-wide:p-3 这类变体一律被压住。
+   浮笺(fuji)不匹配这里任何一条选择器 → 默认态零影响。 */
+
+/* 面板:1px 描边(preview 行 132;浮笺的 .panel 无描边) */
+html[data-style="swiss"] .clip-panel { border: 1px solid var(--hair); }
+
+/* 标题栏:保留下边线(现有 border-b 即为此线),品牌字距 .06em(preview 行 133–134) */
+html[data-style="swiss"] .clip-titlebar h1 { letter-spacing: 0.06em; }
+
+/* 搜索行:去掉上下留白 → 下边线贯穿全宽;搜索框直角、22px、无底无框、只留下边线 */
+html[data-style="swiss"] .clip-searchrow {
+  padding: 0 10px;
+  border-bottom: 1px solid var(--hair);
+}
+html[data-style="swiss"] .clip-searchbox {
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html[data-style="swiss"] .clip-searchbox:focus-within {
+  border-bottom-color: var(--accent);
+  box-shadow: none;
+}
+
+/* 页签:直角分段控件 —— 容器无底无框、gap 0、只留下边线;页签间用 border-right 分隔。
+   只选 [data-selected](React 恒渲染该属性)而不用 button:尾部"新建分组"按钮没有这个
+   属性,故不被卷进来。 */
+html[data-style="swiss"] .clip-tabs {
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  border-radius: 0;
+  background: transparent;
+}
+html[data-style="swiss"] .clip-tabs > button[data-selected] {
+  border-radius: 0;
+  padding: 8px 14px;
+  border-right: 1px solid var(--hair);
+  box-shadow: inset 0 -2px 0 transparent;
+}
+html[data-style="swiss"] .clip-tabs > button[data-selected="true"] {
+  background: var(--surface-2);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* 列表:去掉左右留白 → 行分隔线通到面板边缘(preview 行 141) */
+html[data-style="swiss"] .clip-list { padding: 0; }
+
+/* 行包裹层:行间距 0(浮笺 pb-[3px] / C 段 12px) */
+html[data-style="swiss"] .clip-row-wrap { padding-bottom: 0; }
+
+/* 行:52px 行高 / 直角 / 1px 贯穿全宽下边线 / 悬停用 --hover。
+   box-shadow:none 用来清掉选中行的 ring-2(ring 走 box-shadow,--tw-ring-shadow 参与
+   合成,逐个清变量不可靠 → 整条覆写)。 */
+html[data-style="swiss"] .clip-row {
+  min-height: 52px;
+  padding: 0 10px;
+  border-radius: 0;
+  line-height: 1.45;
+  background: transparent;
+  border-width: 0 0 1px;
+  border-color: var(--hair);
+  box-shadow: none;
+}
+html[data-style="swiss"] .clip-row:hover {
+  background: var(--hover);
+  border-color: var(--hair);
+}
+/* 选中 / 已粘贴:整条覆写 ring-2 ring-accent bg-accent-soft/50 与 opacity-50。
+   --sel-paste 本身已是"已粘贴"的语义色,再叠 50% 透明会把该色洗淡(preview 无透明),
+   故显式还原 opacity:1,让底色与 2px 朱红下划线承担状态表达。 */
+html[data-style="swiss"] .clip-row[data-selected] {
+  background: var(--sel);
+  box-shadow: none;
+}
+html[data-style="swiss"] .clip-row[data-pasted] {
+  background: var(--sel-paste);
+  box-shadow: inset 0 -2px 0 var(--accent);
+  opacity: 1;
+}
+
+/* 序号栏:显形 34px、右对齐、等宽两位数字;选中行序号转朱红加粗 */
+html[data-style="swiss"] .clip-idx {
+  display: block;
+  flex: none;
+  width: 34px;
+  text-align: right;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+html[data-style="swiss"] .clip-row[data-selected] .clip-idx {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 类型图标列:26px → 16px(方案 §3.3:序号 34px + 图标 16px) */
+html[data-style="swiss"] .clip-ico { width: 16px; }
+
+/* 悬停操作按钮(R1):把"宽度动画"改成"绝对定位覆盖"。
+   wrap 脱掉 w-0/overflow-hidden/transition,按钮组相对 .clip-row(relative)定位。
+   opacity:0 时补 pointer-events:none,避免不可见按钮抢走行点击(纯 CSS 即可,
+   无需 JSX 后路)。 */
+html[data-style="swiss"] .clip-actions-wrap {
+  width: auto;
+  padding-left: 0;
+  overflow: visible;
+  transition: none;
+}
+html[data-style="swiss"] .clip-actions {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  gap: 2px;
+  padding: 1px 3px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: 0 0 0 5px var(--bg);
+  opacity: 0;
+  pointer-events: none;
+}
+html[data-style="swiss"] .clip-row:hover .clip-actions,
+html[data-style="swiss"] .clip-row:focus-within .clip-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+html[data-style="swiss"] .clip-actions > button { border-radius: var(--radius); }
+
+/* 状态栏:保留上边线,字号 10px + 字距 .08em(preview 行 135) */
+html[data-style="swiss"] .clip-statusbar {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 空态(preview 行 149) */
+html[data-style="swiss"] .clip-empty { padding: 32px 24px; }
+
+/* 弹窗圆角 2px(方案 §3.3 行 183);--dialog-shadow 保持浮笺值,弹窗仍要浮起 */
+html[data-style="swiss"] .clip-dialog { border-radius: var(--radius); }
+
+/* 连续粘贴横幅:直角(方案 §3.3 行 182;其余保留) */
+html[data-style="swiss"] .clip-continuous-bar { border-radius: var(--radius); }
+
+/* 焦点环内收(preview 行 150) */
+html[data-style="swiss"] :focus-visible { outline-offset: -2px; }
+
+/* A · 容器查询两档(方案 §3.4 末段 / preview §⑥ 行 178–201)。
+   关键:两档都**不动 min-height** —— A 行高恒为 52px,不跟随浮笺的
+   @min-wide:min-h-[60px] 抬到 60。 */
+@container (max-width: 22.5rem) {
+  html[data-style="swiss"] .clip-tabs > button[data-selected] { padding: 8px 10px; }
+}
+@container (min-width: 32.5rem) {
+  html[data-style="swiss"] .clip-row { padding: 0 14px; }
+}
+
 /* 面板宽度自适应断点(容器查询)。面板宽度只有 370~600px,
    1366/1920/3840 之类的视口断点永远不会触发,故按“面板自身宽度”分三档:
    窄 < 22.5rem(360px) / 标准 / 宽 ≥ 32.5rem(520px)。
