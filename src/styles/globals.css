@@ -61,6 +61,103 @@
   --sel-paste: oklch(34% 0.07 258);
 }
 
+/* A 瑞士索引 · 浅 —— 令牌值逐字照抄 preview §③ 行 42,不重算。
+   深色块写成 html[data-style="swiss"].dark(0,2,1)恒胜浅色块(0,1,1),避免同分靠源码位置。 */
+html[data-style="swiss"] {
+  --bg: oklch(96.2% 0.003 95);
+  --surface: oklch(99.2% 0.002 95);
+  --surface-2: oklch(94% 0.004 95);
+  --text: oklch(19% 0.005 260);
+  --muted: oklch(45% 0.008 260);
+  --faint: oklch(62% 0.008 260);
+  --hair: oklch(85% 0.004 95);
+  --accent: oklch(55% 0.19 30);
+  --accent-deep: oklch(48% 0.19 30);
+  --accent-soft: oklch(94% 0.03 30);
+  --star: oklch(62% 0.16 30);
+  --danger: oklch(52% 0.2 27);
+  --hover: oklch(91.5% 0.005 95);
+  --sel: oklch(86.5% 0.012 95);
+  --sel-paste: oklch(82% 0.045 30);
+  --radius: 2px;
+  /* §1.4 审计补齐:朱红焦点环 = 本块 --accent 原值 + 浮笺环透明度(0.28),防"朱红底 + 蓝焦点环"串色;
+     A 明确无阴影,故 lift 两枚显式置 none,不继承浮笺的浮起投影。 */
+  --accent-ring: oklch(55% 0.19 30 / 0.28);
+  --lift: none;
+  --lift-hover: none;
+}
+
+/* A 瑞士索引 · 深 —— 逐字照抄 preview 行 44 */
+html[data-style="swiss"].dark {
+  --bg: oklch(16.5% 0.004 260);
+  --surface: oklch(20% 0.005 260);
+  --surface-2: oklch(24.5% 0.006 260);
+  --text: oklch(95% 0.003 95);
+  --muted: oklch(70% 0.006 260);
+  --faint: oklch(56% 0.008 260);
+  --hair: oklch(30% 0.006 260);
+  --accent: oklch(65% 0.18 32);
+  --accent-deep: oklch(72% 0.16 32);
+  --accent-soft: oklch(28% 0.06 30);
+  --star: oklch(68% 0.16 32);
+  --danger: oklch(66% 0.18 27);
+  --hover: oklch(25% 0.007 260);
+  --sel: oklch(31.5% 0.01 260);
+  --sel-paste: oklch(36% 0.055 30);
+  --radius: 2px;
+  --accent-ring: oklch(65% 0.18 32 / 0.3);
+  --lift: none;
+  --lift-hover: none;
+}
+
+/* C 雾绿工作台 · 浅 —— 逐字照抄 preview 行 46 */
+html[data-style="mist"] {
+  --bg: oklch(95.8% 0.008 150);
+  --surface: oklch(98.2% 0.006 150);
+  --surface-2: oklch(93.2% 0.012 152);
+  --text: oklch(29% 0.012 160);
+  --muted: oklch(50% 0.012 160);
+  --faint: oklch(63% 0.012 160);
+  --hair: oklch(88.5% 0.008 150 / 0.7);
+  --accent: oklch(58% 0.09 168);
+  --accent-soft: oklch(93.5% 0.03 168);
+  --star: oklch(66% 0.1 130);
+  --danger: oklch(55% 0.15 27);
+  --hover: oklch(93.5% 0.016 152);
+  --sel: oklch(87.5% 0.024 152);
+  --sel-paste: oklch(86% 0.055 168);
+  --radius: 14px;
+  /* §1.4 审计补齐:C 块缺 --accent-deep(按浮笺 accent→deep 的降明度规律推出);
+     雾绿焦点环 = 本块 --accent 原值 + 浮笺环透明度;柔和投影照抄 preview ⑤ C 的两条配方。 */
+  --accent-deep: oklch(53% 0.09 168);
+  --accent-ring: oklch(58% 0.09 168 / 0.28);
+  --lift: 0 1px 3px oklch(60% 0.02 165 / 0.10);
+  --lift-hover: 0 1px 3px oklch(60% 0.02 165 / 0.16);
+}
+
+/* C 雾绿工作台 · 深 —— 逐字照抄 preview 行 48;深色下浮起同样改由描边承担(preview 行 172–175) */
+html[data-style="mist"].dark {
+  --bg: oklch(21% 0.008 165);
+  --surface: oklch(24.5% 0.01 165);
+  --surface-2: oklch(28.5% 0.012 165);
+  --text: oklch(93% 0.006 160);
+  --muted: oklch(72% 0.008 160);
+  --faint: oklch(58% 0.008 160);
+  --hair: oklch(32% 0.008 165 / 0.7);
+  --accent: oklch(76% 0.09 168);
+  --accent-soft: oklch(31% 0.04 168);
+  --star: oklch(78% 0.09 130);
+  --danger: oklch(70% 0.14 27);
+  --hover: oklch(29.5% 0.014 165);
+  --sel: oklch(34.5% 0.02 165);
+  --sel-paste: oklch(38% 0.06 168);
+  --radius: 14px;
+  --accent-deep: oklch(82% 0.09 168);
+  --accent-ring: oklch(76% 0.09 168 / 0.3);
+  --lift: inset 0 0 0 1px var(--hair);
+  --lift-hover: inset 0 0 0 1px var(--hair);
+}
+
 @theme inline {
   --color-app: var(--bg);
   --color-surface: var(--surface);
