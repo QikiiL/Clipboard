@@ -308,35 +308,27 @@ html[data-style="swiss"] .clip-row[data-selected] .clip-idx {
 /* 类型图标列:26px → 16px(方案 §3.3:序号 34px + 图标 16px) */
 html[data-style="swiss"] .clip-ico { width: 16px; }
 
-/* 悬停操作按钮(R1):把"宽度动画"改成"绝对定位覆盖"。
-   wrap 脱掉 w-0/overflow-hidden/transition,按钮组相对 .clip-row(relative)定位。
-   opacity:0 时补 pointer-events:none,避免不可见按钮抢走行点击(纯 CSS 即可,
-   无需 JSX 后路)。 */
-html[data-style="swiss"] .clip-actions-wrap {
-  width: auto;
-  padding-left: 0;
-  overflow: visible;
-  transition: none;
+/* 悬停操作按钮(R1):**沿用浮笺的交互模式**,不做绝对定位覆盖。
+   wrap 平时 `w-0` + `overflow-hidden`(按钮完全不可见、不可点、几乎不占正文宽度),
+   `group-hover:`/`group-focus-within:` 时宽度动画展开(`transition-[width] duration-150`)、
+   内层 `.clip-actions` 同步渐显(opacity);展开使右侧集群变宽,正文列收窄交给 <p>
+   自带的 `truncate`(text-overflow:ellipsis)处理 —— 行外框宽高都不跳。
+   A 段只改视觉,不动 width/overflow/transition 这三个交互属性:
+   · 按钮 26px → 20px(照 preview 行 82 的 `.actbtn{width:20px;height:20px}`)
+   · 圆角 rounded-[7px] → var(--radius)=2px
+   · 展开宽度按 20px 重算:8px(padding-left) + 4×20 + 3×2(gap) = 94px
+   之前那套"绝对定位 + --bg 底 + 5px 光晕"会压住正文尾部与省略号(实测 39–62px),
+   已按用户决策废弃。 */
+html[data-style="swiss"] .clip-actions-wrap { padding-left: 8px; }
+html[data-style="swiss"] .clip-row:hover .clip-actions-wrap,
+html[data-style="swiss"] .clip-row:focus-within .clip-actions-wrap {
+  width: 94px;
 }
-html[data-style="swiss"] .clip-actions {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  gap: 2px;
-  padding: 1px 3px;
+html[data-style="swiss"] .clip-actions > button {
+  width: 20px;
+  height: 20px;
   border-radius: var(--radius);
-  background: var(--bg);
-  box-shadow: 0 0 0 5px var(--bg);
-  opacity: 0;
-  pointer-events: none;
 }
-html[data-style="swiss"] .clip-row:hover .clip-actions,
-html[data-style="swiss"] .clip-row:focus-within .clip-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-html[data-style="swiss"] .clip-actions > button { border-radius: var(--radius); }
 
 /* 状态栏:保留上边线,字号 10px + 字距 .08em(preview 行 135) */
 html[data-style="swiss"] .clip-statusbar {
