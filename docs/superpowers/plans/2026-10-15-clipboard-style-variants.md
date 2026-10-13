@@ -15,12 +15,14 @@
 **产物与验证策略：** 唯一产物是上面那个 `index.html`（§10.1 要求该目录恰好 1 个文件）——**不新增任何测试文件**，也不建 `plans/verification/`；**不建 worktree**（用户已选择直接在当前 master 上做）。静态约束用临时 Node one-liner（跑完即弃）；浏览器验证用**本机 Edge 155 + Node 24 原生 `WebSocket` 直连 CDP**（环境已确认可用）：截图、点击、抓 Console/异常都能做，**不安装 Playwright 或任何依赖**；临时脚本一律放 `%TEMP%`、不提交；§10 人工清单仍是最终依据。
 
 ```powershell
-# ① 截图（headless，免脚本）；--blink-settings=scriptEnabled=false 用于 no-JS 验收
-& "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless=new --disable-gpu --window-size=1440,900 --screenshot="$env:TEMP\clip-var-p1-1440.png" "file:///D:/copy/clipboard-manager-tauri/docs/superpowers/previews/clipboard-style-variants/index.html"
-# ② 点击 / Console / 异常：先起 CDP，再跑临时脚本（Node 24 自带 WebSocket，无依赖）
-& msedge --headless=new --remote-debugging-port=9222 --user-data-dir="$env:TEMP\clip-cdp-profile" "file:///D:/copy/clipboard-manager-tauri/docs/superpowers/previews/clipboard-style-variants/index.html"
+# ① 截图（headless，免脚本）。每次用独立 --user-data-dir，避免与已开 Edge 争用；Edge 的 stderr 噪声可忽略
+& "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless=new --disable-gpu --window-size=1440,900 --user-data-dir="$env:TEMP\clip-edge-$PID" --screenshot="$env:TEMP\clip-var-p1-1440.png" "file:///D:/copy/clipboard-manager-tauri/docs/superpowers/previews/clipboard-style-variants/index.html" 2>$null
+# ② 点击 / Console / 异常 / no-JS：先起 CDP（全路径 + 每次独立 profile，stderr 噪声丢弃），再跑临时脚本（Node 24 自带 WebSocket，无依赖）
+& "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --headless=new --remote-debugging-port=9222 --user-data-dir="$env:TEMP\clip-cdp-profile-$PID" "about:blank" 2>$null
 node "$env:TEMP\clip-cdp.mjs"   # GET /json/list 取 webSocketDebuggerUrl → Runtime.enable + Log.enable → Runtime.evaluate 点击 → Page.captureScreenshot → 打印 console/异常
 ```
+
+**no-JS 验收必须走 CDP**：不要用 `--blink-settings=scriptEnabled=false`（实测会让 headless 截图变成 0 字节）。正确做法是在 `Page.navigate` **之前**发 `Emulation.setScriptExecutionDisabled {value:true}`，再 navigate 到 `file:///…/index.html`，然后 `Page.captureScreenshot`；脚本与交互验收同样跑在这条链路上。
 
 内部顺序固定：① head+style ② 外壳令牌 ③ 6 个变体令牌块 ④ 组件层 ⑤ 断点 ⑥ 静态骨架 ⑦ `createPanel()` 实例化 3 次。
 
@@ -205,7 +207,7 @@ Gate 2 的断言只覆盖**静态骨架里必然存在**的标记：默认场景
 
 - [ ] **Step 4: 窄屏与 no-JS**：320px 隐藏状态栏存储大小与版本号、列表 padding 收窄、页签横向滚动（滚动条 4px）、横幅按钮换行、模态 `margin:0 12px`，无横向滚动无溢出；520/600px 行高 +8px、字号 +0.5~1px、列表 padding 16px；`.no-js [data-requires-js]{display:none}`，每列显示完整默认场景 + `<noscript>` 提示，不得出现空白列或错位。
 
-- [ ] **Step 5: 验证 + 提交**：Gate 1 + Gate 2 stage=2 双 PASS；截图 `$env:TEMP\clip-var-320.png`（列宽 320）、`clip-var-nojs.png`（① 命令加 `--blink-settings=scriptEnabled=false`），`read_image` 检查 320 无溢出、no-JS 三列完整；然后 `git add docs/superpowers/previews/clipboard-style-variants/index.html && git commit -m "feat(preview): scenes, narrow breakpoints, no-js fallback"`
+- [ ] **Step 5: 验证 + 提交**：Gate 1 + Gate 2 stage=2 双 PASS；截图 `$env:TEMP\clip-var-320.png`（列宽 320）；`clip-var-nojs.png` 用 ② 脚本在 `Page.navigate` 前发 `Emulation.setScriptExecutionDisabled {value:true}` 再导航截图（**不要用 `--blink-settings=scriptEnabled=false`，实测 0 字节**），`read_image` 检查 320 无溢出、no-JS 三列完整；然后 `git add docs/superpowers/previews/clipboard-style-variants/index.html && git commit -m "feat(preview): scenes, narrow breakpoints, no-js fallback"`
 
 ---
 
