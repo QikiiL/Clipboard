@@ -1,0 +1,731 @@
+<!doctype html>
+<html class="no-js" lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>剪贴板 · 风格变体 A / C（阶段 2 定稿）</title>
+<style>
+/* ① 外壳令牌 —— 比较器自身的中性壳，不参与任何一套风格的辨识 */
+:root{--font:'Segoe UI Variable Text','Segoe UI','Microsoft YaHei UI',system-ui;--shell-bg:oklch(93.6% 0.004 95);--shell-surface:oklch(98.6% 0.002 95);--shell-text:oklch(23% 0.006 260);--shell-muted:oklch(48% 0.008 260);--shell-faint:oklch(62% 0.008 260);--shell-hair:oklch(85% 0.004 95)}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{font-family:var(--font);background:var(--shell-bg);color:var(--shell-text);-webkit-font-smoothing:antialiased}
+svg{display:block;flex:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+input{font:inherit;color:inherit;background:none;border:0;outline:none;width:100%}
+input::placeholder{color:var(--faint)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* 无 JS：隐藏只有脚本才能驱动的交互控件 */
+.no-js [data-requires-js]{display:none!important}
+
+/* ② 比较器外壳 */
+.board{display:flex;flex-wrap:wrap;gap:24px;padding:24px;align-items:flex-start}
+.boardhead{flex:1 1 100%;max-width:1064px}
+.boardhead h1{font-size:17px;margin:6px 0 8px;letter-spacing:.02em}
+.boardhead p{margin:0 0 6px;font-size:12.5px;line-height:1.7;color:var(--shell-muted);text-wrap:pretty}
+.draft{display:inline-block;font-size:10px;letter-spacing:.14em;border:1px dashed var(--shell-hair);border-radius:999px;padding:2px 9px;color:var(--shell-muted)}
+.col{flex:none;width:520px;max-width:100%}
+.colhead{display:flex;align-items:baseline;gap:8px;padding:0 2px 4px}
+.colhead h2{font-size:14px;margin:0;letter-spacing:.02em}
+.colhead .code{font-size:11px;letter-spacing:.16em;color:var(--shell-muted);font-variant-numeric:tabular-nums}
+.colhead .themetog{margin-left:auto;font-size:11px;line-height:1;padding:4px 10px;border:1px solid var(--shell-hair);border-radius:999px;background:var(--shell-surface);color:var(--shell-muted)}
+.colhead .themetog:hover{color:var(--shell-text);border-color:var(--shell-muted)}
+.colmeta{padding:0 2px 10px;font-size:11.5px;line-height:1.6;color:var(--shell-faint)}
+.assumptions{list-style:none;margin:0 0 10px;padding:9px 12px;border:1px dashed var(--shell-hair);border-radius:6px;background:var(--shell-surface);font-size:12px;line-height:1.65}
+.assumptions li+li{margin-top:5px}
+.assumptions b{font-weight:600;margin-right:4px}
+.assumptions .how{color:var(--shell-muted)}
+
+/* ③ 两套变体令牌 —— 值逐字照抄 spec §4.1；--hover/--sel/--sel-paste 是选中与悬停的专用层 */
+/* A 瑞士索引 · 浅 */
+[data-variant="a"][data-theme="light"]{--bg:oklch(96.2% 0.003 95);--surface:oklch(99.2% 0.002 95);--surface-2:oklch(94% 0.004 95);--text:oklch(19% 0.005 260);--muted:oklch(45% 0.008 260);--faint:oklch(62% 0.008 260);--hair:oklch(85% 0.004 95);--accent:oklch(55% 0.19 30);--accent-deep:oklch(48% 0.19 30);--accent-soft:oklch(94% 0.03 30);--star:oklch(62% 0.16 30);--danger:oklch(52% 0.2 27);--hover:oklch(91.5% 0.005 95);--sel:oklch(86.5% 0.012 95);--sel-paste:oklch(82% 0.045 30);--radius:2px}
+/* A 瑞士索引 · 深 */
+[data-variant="a"][data-theme="dark"]{--bg:oklch(16.5% 0.004 260);--surface:oklch(20% 0.005 260);--surface-2:oklch(24.5% 0.006 260);--text:oklch(95% 0.003 95);--muted:oklch(70% 0.006 260);--faint:oklch(56% 0.008 260);--hair:oklch(30% 0.006 260);--accent:oklch(65% 0.18 32);--accent-deep:oklch(72% 0.16 32);--accent-soft:oklch(28% 0.06 30);--star:oklch(68% 0.16 32);--danger:oklch(66% 0.18 27);--hover:oklch(25% 0.007 260);--sel:oklch(31.5% 0.01 260);--sel-paste:oklch(36% 0.055 30);--radius:2px}
+/* C 雾绿工作台 · 浅 */
+[data-variant="c"][data-theme="light"]{--bg:oklch(95.8% 0.008 150);--surface:oklch(98.2% 0.006 150);--surface-2:oklch(93.2% 0.012 152);--text:oklch(29% 0.012 160);--muted:oklch(50% 0.012 160);--faint:oklch(63% 0.012 160);--hair:oklch(88.5% 0.008 150 / 0.7);--accent:oklch(58% 0.09 168);--accent-soft:oklch(93.5% 0.03 168);--star:oklch(66% 0.1 130);--danger:oklch(55% 0.15 27);--hover:oklch(93.5% 0.016 152);--sel:oklch(87.5% 0.024 152);--sel-paste:oklch(86% 0.055 168);--radius:14px}
+/* C 雾绿工作台 · 深 */
+[data-variant="c"][data-theme="dark"]{--bg:oklch(21% 0.008 165);--surface:oklch(24.5% 0.01 165);--surface-2:oklch(28.5% 0.012 165);--text:oklch(93% 0.006 160);--muted:oklch(72% 0.008 160);--faint:oklch(58% 0.008 160);--hair:oklch(32% 0.008 165 / 0.7);--accent:oklch(76% 0.09 168);--accent-soft:oklch(31% 0.04 168);--star:oklch(78% 0.09 130);--danger:oklch(70% 0.14 27);--hover:oklch(29.5% 0.014 165);--sel:oklch(34.5% 0.02 165);--sel-paste:oklch(38% 0.06 168);--radius:14px}
+
+/* ④ 组件层 —— 骨架共享，差异全部落在视觉 */
+.panel{position:relative;width:100%;height:520px;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);color:var(--text);border-radius:var(--radius);container-type:inline-size}
+.titlebar{height:46px;flex:none;display:flex;align-items:center;gap:4px;padding:0 10px}
+.brand{flex:1;font-size:13px;font-weight:600}
+.iconbtn{width:26px;height:26px;border-radius:var(--radius);color:var(--muted)}
+.iconbtn:hover{background:var(--surface-2);color:var(--text)}
+.winbtn{width:24px;height:24px;border-radius:var(--radius);color:var(--faint)}
+.winbtn:hover{background:var(--surface-2);color:var(--text)}
+.winctl{display:flex;gap:2px;margin-left:6px}
+.searchrow{height:36px;flex:none;display:flex;align-items:center;padding:0 10px}
+.searchbox{flex:1;display:flex;align-items:center;gap:6px;color:var(--muted)}
+.tabs{flex:none;display:flex;align-items:center;gap:6px;padding:6px 10px;overflow-x:auto}
+.tabs::-webkit-scrollbar{height:4px}
+.tabs::-webkit-scrollbar-thumb{background:var(--hair);border-radius:2px}
+.tab{font-size:12px;padding:4px 10px;border-radius:var(--radius);white-space:nowrap;color:var(--muted)}
+.list{flex:1;overflow-y:auto;overflow-x:hidden}
+.row{display:flex;align-items:center;gap:8px;padding:0 10px;border-radius:var(--radius);cursor:pointer}
+.row [data-role="idx"]{flex:none;text-align:right;font-size:11px;color:var(--faint)}
+.row [data-role="ico"]{flex:none;color:var(--muted)}
+.row [data-role="thumb"]{flex:none;width:34px;height:22px;border-radius:2px;background:oklch(70% 0.06 250)}
+.row [data-role="body"]{flex:1;min-width:0}
+.row [data-role="title"]{margin:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row [data-role="sub"]{margin:2px 0 0;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row [data-role="meta"]{position:relative;flex:none;display:flex;align-items:center;justify-content:flex-end;gap:6px;min-width:96px;font-size:11px;color:var(--faint)}
+.row [data-role="star"]{width:18px;height:18px;color:var(--faint)}
+.row [data-role="star"] svg{fill:none;stroke:currentColor}
+.row [data-role="star"][data-on]{color:var(--star)}
+.row [data-role="star"][data-on] svg{fill:currentColor;stroke:none}
+.row [data-role="gico"]{display:inline-flex;color:var(--faint)}
+/* 悬停展开 4 个操作按钮：绝对定位覆盖，meta 区预留宽度 → 行高与正文宽度都不跳动 */
+.row [data-role="acts"]{display:none;position:absolute;right:0;top:50%;transform:translateY(-50%);gap:2px;padding:1px 3px;border-radius:var(--radius);color:var(--muted);background:var(--surface);box-shadow:0 0 0 5px var(--surface)}
+.row:hover [data-role="acts"],.row:focus-within [data-role="acts"]{display:flex}
+.actbtn{width:20px;height:20px;border-radius:var(--radius);color:var(--muted)}
+.actbtn:hover{background:var(--surface-2);color:var(--text)}
+/* 行内二次确认：接管 meta 区，其余元信息让位 */
+.row [data-role="confirm"]{display:none;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap}
+.row[data-confirm] [data-role="confirm"]{display:flex}
+.row[data-confirm] [data-role="star"],.row[data-confirm] [data-role="gico"],.row[data-confirm] [data-role="time"],.row[data-confirm] [data-role="acts"]{display:none}
+.mini{font-size:11px;line-height:1;padding:4px 8px;border-radius:var(--radius);border:1px solid var(--hair);color:var(--muted)}
+.mini:hover{background:var(--surface-2);color:var(--text)}
+.mini.danger{color:var(--danger);border-color:var(--danger)}
+.mini.danger:hover{background:var(--danger);color:var(--surface)}
+.log{flex:none;display:flex;flex-wrap:wrap;gap:2px 10px;padding:3px 10px 4px;border-top:1px solid var(--hair);font-size:10.5px;color:var(--faint);max-height:40px;overflow:hidden}
+.logline{white-space:nowrap;font-variant-numeric:tabular-nums}
+.logline[data-latest]{color:var(--text)}
+.statusbar{height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 10px;font-size:11px;color:var(--muted)}
+.statusbar .grow{flex:1}
+.statusbar .mode{color:var(--faint)}
+.statusbar .live{display:inline-flex;align-items:center;gap:5px;color:var(--muted)}
+.statusbar .live i{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.statusbar .live[data-paused] i{background:var(--faint)}
+/* 空态：图标 → 标题 → 描述 → 可选按钮（文案照抄 ClipboardList.tsx:100-147） */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;padding:32px 24px;text-align:center;color:var(--faint)}
+.empty .eico{color:var(--faint)}
+.empty .etitle{margin:12px 0 0;font-size:13px;max-width:300px;word-break:break-all;color:var(--faint)}
+.empty .edesc{margin:4px 0 0;font-size:12px}
+.empty .ghost{margin-top:12px;height:30px;padding:0 16px;font-size:12px;border:1px solid var(--hair);border-radius:var(--radius);color:var(--muted)}
+.empty .ghost:hover{background:var(--surface-2);color:var(--text)}
+/* 设置模态：遮罩 + 卡片，6 分区 */
+.modal{position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:12px}
+.modal .scrim{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.dialog{position:relative;width:min(448px,100%);max-height:90%;display:flex;flex-direction:column;background:var(--surface);color:var(--text);border-radius:var(--radius);box-shadow:0 12px 32px oklch(20% 0.02 260 / .28);overflow:hidden}
+.dlghead{flex:none;display:flex;align-items:center;gap:8px;height:44px;padding:0 10px 0 14px;border-bottom:1px solid var(--hair)}
+.dlghead .t{flex:1;font-size:13px;font-weight:600}
+.dlghead .ver{font-size:11px;color:var(--faint)}
+.dlgbody{flex:1;overflow-y:auto;padding:2px 14px 10px}
+.sect{padding:10px 0 6px;border-bottom:1px solid var(--hair)}
+.sect:last-child{border-bottom:0}
+.sect h3{margin:0 0 4px;font-size:10px;font-weight:600;letter-spacing:.16em;color:var(--faint)}
+.srow{display:flex;align-items:center;gap:10px;min-height:32px;font-size:12.5px}
+.srow .label{flex:1;min-width:0}
+.srow .val{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sw{flex:none;width:36px;height:20px;display:flex;align-items:center;justify-content:flex-start;padding:0 3px;border-radius:999px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--hair)}
+.sw i{width:14px;height:14px;border-radius:50%;background:var(--faint)}
+.sw[aria-checked="true"]{justify-content:flex-end;background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.sw[aria-checked="true"] i{background:var(--accent)}
+.keys{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--muted)}
+kbd{font:inherit;font-size:10.5px;padding:2px 6px;border-radius:4px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--hair);color:var(--text)}
+.dangerbtn{flex:none;font-size:11.5px;line-height:1;padding:4px 10px;border-radius:var(--radius);border:1px solid var(--danger);color:var(--danger)}
+.dangerbtn:hover{background:var(--danger);color:var(--surface)}
+
+/* ⑤ A · 瑞士索引：贯穿全宽分隔线 / 34px 两位序号栏 / 直角分段页签 / 无阴影无 pill 无侧边强调条 */
+[data-variant="a"] .panel{border:1px solid var(--hair)}
+[data-variant="a"] .brand{letter-spacing:.06em}
+[data-variant="a"] .titlebar,[data-variant="a"] .searchrow{border-bottom:1px solid var(--hair)}
+[data-variant="a"] .statusbar{border-top:1px solid var(--hair);font-size:10px;letter-spacing:.08em;font-variant-numeric:tabular-nums}
+[data-variant="a"] .searchbox{height:22px;border-bottom:1px solid var(--hair)}
+[data-variant="a"] .searchbox:focus-within{border-bottom-color:var(--accent)}
+[data-variant="a"] .tabs{gap:0;padding:0;border-bottom:1px solid var(--hair)}
+[data-variant="a"] .tab{border-radius:0;padding:8px 14px;border-right:1px solid var(--hair);box-shadow:inset 0 -2px 0 transparent}
+[data-variant="a"] .tab[aria-selected="true"]{background:var(--surface-2);color:var(--accent);font-weight:600;box-shadow:inset 0 -2px 0 var(--accent)}
+[data-variant="a"] .list{padding:0}
+[data-variant="a"] .row{min-height:52px;border-bottom:1px solid var(--hair);border-radius:0;line-height:1.45;padding:0 10px}
+[data-variant="a"] .row:hover{background:var(--hover)}
+[data-variant="a"] .row [data-role="idx"]{width:34px;font-size:12px;font-variant-numeric:tabular-nums;letter-spacing:.06em}
+[data-variant="a"] .row[data-selected]{background:var(--sel)}
+[data-variant="a"] .row[data-selected] [data-role="idx"]{color:var(--accent);font-weight:600}
+[data-variant="a"] .row[data-pasted]{background:var(--sel-paste);box-shadow:inset 0 -2px 0 var(--accent)}
+[data-variant="a"] .row [data-role="acts"]{background:var(--bg);box-shadow:0 0 0 5px var(--bg)}
+[data-variant="a"] .empty{padding:32px 24px}
+[data-variant="a"] :focus-visible{outline-offset:-2px}
+
+/* ⑤ C · 雾绿工作台：无描边无侧边竖条 / 圆角 14px / 12px 行间隙 / 明度分层 + 柔和投影 / 低对比 pill */
+[data-variant="c"] .panel{box-shadow:0 1px 3px oklch(60% 0.02 165 / 0.10)}
+[data-variant="c"] .searchrow{padding:0 12px}
+[data-variant="c"] .searchbox{height:28px;padding:0 10px;border-radius:999px;background:var(--surface);box-shadow:0 1px 2px oklch(60% 0.02 165 / 0.10)}
+[data-variant="c"] .searchbox:focus-within{box-shadow:0 0 0 2px var(--accent-soft)}
+[data-variant="c"] .tabs{gap:6px;padding:2px 12px 8px}
+[data-variant="c"] .tab{border-radius:999px;padding:4px 12px}
+[data-variant="c"] .tab[aria-selected="true"]{background:var(--sel);color:var(--text);font-weight:600}
+[data-variant="c"] .list{padding:4px 12px 2px}
+[data-variant="c"] .row{min-height:60px;margin-bottom:12px;padding:0 12px;border-radius:14px;line-height:1.7;background:var(--surface);box-shadow:0 1px 2px oklch(60% 0.02 165 / 0.07)}
+[data-variant="c"] .row:hover{background:var(--hover);box-shadow:0 1px 3px oklch(60% 0.02 165 / 0.16)}
+[data-variant="c"] .row [data-role="idx"]{font-size:12px}
+[data-variant="c"] .row [data-role="title"]{font-size:13.5px}
+[data-variant="c"] .row [data-role="thumb"]{width:40px;height:26px;border-radius:8px}
+[data-variant="c"] .row[data-selected]{background:var(--sel)}
+[data-variant="c"] .row[data-selected] [data-role="title"]{font-weight:600}
+[data-variant="c"] .row[data-pasted]{background:var(--sel-paste);box-shadow:0 0 0 2px var(--accent)}
+[data-variant="c"] .row [data-role="acts"]{background:var(--surface)}
+[data-variant="c"] .statusbar{padding:0 12px}
+[data-variant="c"] .empty{padding:64px 24px;line-height:1.8}
+[data-variant="c"][data-theme="dark"] .panel{box-shadow:inset 0 0 0 1px var(--hair)}
+[data-variant="c"][data-theme="dark"] .searchbox{box-shadow:inset 0 0 0 1px var(--hair)}
+[data-variant="c"][data-theme="dark"] .row{box-shadow:inset 0 0 0 1px var(--hair)}
+[data-variant="c"][data-theme="dark"] .row:hover{background:var(--hover);box-shadow:inset 0 0 0 1px var(--hair)}
+
+/* ⑥ 断点 —— 面板容器查询（360 / 520 两档）+ 比较器堆叠 */
+@container (max-width:360px){
+  .statusbar .storage,.statusbar .ver{display:none}
+  .titlebar{padding:0 6px}
+  .searchrow{padding:0 6px}
+  .tabs{padding:4px 6px;gap:4px}
+  .row{padding:0 6px;gap:6px}
+  .row [data-role="meta"]{min-width:0;gap:4px}
+  .log{padding:3px 6px 4px}
+  .dialog{width:100%}
+  .dlgbody{padding:2px 10px 8px}
+  [data-variant="a"] .tab{padding:8px 10px}
+  [data-variant="c"] .list{padding:2px 6px}
+  [data-variant="c"] .tabs{padding:2px 6px 6px}
+  [data-variant="c"] .searchrow{padding:0 6px}
+  [data-variant="c"] .statusbar{padding:0 6px}
+}
+/* ≥520px：行高舒展只给横向余量，A 保持 52 / C 保持 60，不全局抬到 60 */
+@container (min-width:520px){
+  [data-variant="a"] .row{padding:0 14px}
+  [data-variant="a"] .row [data-role="title"]{font-size:13.5px}
+  [data-variant="c"] .list{padding:6px 16px 4px}
+  [data-variant="c"] .row{padding:0 14px}
+  [data-variant="c"] .row [data-role="title"]{font-size:14px}
+}
+@media (max-width:1100px){.board{flex-direction:column;align-items:center}.col{width:100%;max-width:520px}.boardhead{max-width:520px}}
+</style>
+</head>
+<body>
+<div class="board" data-board>
+  <div class="boardhead">
+    <span class="draft">阶段 2 · 交互定稿</span>
+    <h1>剪贴板 · 两套风格变体（A 瑞士索引 / C 雾绿工作台）</h1>
+    <p>本页只有 A / C 两套（用户拍板后的最终版）。两列共用同一份布局骨架、同一份示例内容（10 条中性虚构示例）与同一套点击行为，差异只在视觉层。</p>
+    <p>每列独立状态：浅深两态各自成套（spec §4.1 令牌）、页签过滤、搜索、星标、行内删除确认、设置模态、活动日志互不干扰。列头的「浅色 / 深色」按钮与设置模态里的「深色模式」开关联动本列。</p>
+    <p>示例内容全部硬编码，不读取真实剪贴板、不写系统剪贴板；界面标识是纯文本「剪贴板」，不使用任何 logo 或字标。禁用 JavaScript 时静态 DOM 即为完整默认场景。</p>
+  </div>
+
+  <!-- ============================ A · 瑞士索引 ============================ -->
+  <section class="col" data-variant="a" data-theme="light">
+    <div class="colhead"><span class="code">A</span><h2>瑞士索引</h2><span class="draft">阶段 2 · 定稿</span><button class="themetog" data-role="theme" data-requires-js aria-label="切换本列浅深">浅色</button></div>
+    <p class="colmeta">浅灰白底 · 贯穿全宽的分隔线 · 34px 两位序号栏 · 单一朱红只做定位 · 无阴影、无 pill、无侧边强调条</p>
+    <ul class="assumptions" data-role="assumptions">
+      <li><b>A1</b>贯穿全宽的分隔线比卡片更利于快速扫描。<span class="how">怎么看：不读列头，能否一眼看出这是「索引」而不是卡片列表。</span></li>
+      <li><b>A2</b>行左两位序号栏支持按位置记忆。<span class="how">怎么看：能否凭序号直接回到第 07 条。</span></li>
+      <li><b>A3</b>单一朱红只做定位、不参与装饰。<span class="how">怎么看：红色是否只出现在选中页签、选中行序号、收藏星、焦点环四处。</span></li>
+    </ul>
+    <div class="panel" data-role="panel" data-scene="s1">
+      <div class="titlebar" data-role="titlebar">
+        <span class="brand">剪贴板</span>
+        <button class="iconbtn" data-role="pin" aria-label="置顶"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/></svg></button>
+        <button class="iconbtn" data-role="keep" aria-label="保持打开"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M3 9h18"/></svg></button>
+        <button class="iconbtn" data-role="band" aria-label="连续粘贴"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></button>
+        <button class="iconbtn" data-role="settings" aria-label="设置"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <span class="winctl"><button class="winbtn" aria-label="最小化"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg></button><button class="winbtn" aria-label="最大化"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="1.5"/></svg></button><button class="winbtn" aria-label="关闭"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>
+      </div>
+      <div class="searchrow" data-role="search"><span class="searchbox"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><input type="text" placeholder="搜索剪贴板…" aria-label="搜索剪贴板"></span></div>
+      <div class="tabs" data-role="tabs">
+        <button class="tab" data-role="tab" data-tab="all" aria-selected="true">全部</button>
+        <button class="tab" data-role="tab" data-tab="fav" aria-selected="false">收藏</button>
+        <button class="tab" data-role="tab" data-tab="g:a" aria-selected="false">示例分组 A</button>
+        <button class="tab" data-role="tab" data-tab="g:b" aria-selected="false">示例分组 B</button>
+        <button class="tab" data-role="addgroup" data-requires-js aria-label="新建分组"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      </div>
+      <div class="list" data-role="list">
+        <div class="row" data-role="row" data-n="01" data-type="text" data-group="a" tabindex="0">
+          <span data-role="idx">01</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">npm run tauri build</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="gico"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span data-role="time">刚刚</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="02" data-type="link" data-selected="1" tabindex="0">
+          <span data-role="idx">02</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+          <div data-role="body"><p data-role="title">https://example.test/docs/build</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="time">12 分钟前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="03" data-type="image" data-group="b" tabindex="0">
+          <span data-role="idx">03</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></span><span data-role="thumb"></span>
+          <div data-role="body"><p data-role="title">示例图片 · 1440 × 900 · 268 KB</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="gico"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span data-role="time">26 分钟前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="04" data-type="file" data-group="b" tabindex="0">
+          <span data-role="idx">04</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+          <div data-role="body"><p data-role="title">示例报表.xlsx</p><p data-role="sub">3 个文件 · D:\示例目录\示例报表.xlsx</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="gico"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span data-role="time">1 小时前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="05" data-type="text" tabindex="0">
+          <span data-role="idx">05</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">示例文本 05（虚构内容，用于演示收藏态）</p></div>
+          <div data-role="meta"><button data-role="star" data-on aria-label="取消收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="time">2 小时前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="06" data-type="text" data-group="a" tabindex="0">
+          <span data-role="idx">06</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">示例文本 06（虚构内容）</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="gico"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span data-role="time">3 小时前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="07" data-type="link" data-group="a" tabindex="0">
+          <span data-role="idx">07</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+          <div data-role="body"><p data-role="title">https://example.test/start</p></div>
+          <div data-role="meta"><button data-role="star" data-on aria-label="取消收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="gico"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span data-role="time">5 小时前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="08" data-type="text" tabindex="0">
+          <span data-role="idx">08</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt; &amp; 引号 &quot; ' 的转义用例</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="time">8 小时前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="09" data-type="text" tabindex="0">
+          <span data-role="idx">09</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">示例文本 09（虚构内容）</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="time">1 天前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="10" data-type="text" tabindex="0">
+          <span data-role="idx">10</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">示例文本 10（虚构内容）</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="time">2 天前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="empty" data-role="empty" data-empty="none" hidden>
+          <span class="eico"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span>
+          <p class="etitle">暂无剪贴板记录</p>
+          <p class="edesc">复制内容后将自动出现在这里</p>
+        </div>
+        <div class="empty" data-role="empty" data-empty="search" hidden>
+          <span class="eico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg></span>
+          <p class="etitle">没有匹配「<span data-role="q"></span>」的记录</p>
+          <p class="edesc">换个关键词试试</p>
+          <button class="ghost" data-role="clear-search">清空搜索</button>
+        </div>
+        <div class="empty" data-role="empty" data-empty="fav" hidden>
+          <span class="eico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+          <p class="etitle">还没有收藏</p>
+          <p class="edesc">点条目上的 ☆ 把常用内容收进来</p>
+        </div>
+        <div class="empty" data-role="empty" data-empty="group" hidden>
+          <span class="eico"><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+          <p class="etitle">这个分组还是空的</p>
+          <p class="edesc">点条目上的文件夹图标把内容归进来</p>
+        </div>
+      </div>
+      <div class="log" data-role="log" hidden></div>
+      <div class="statusbar" data-role="statusbar"><span data-role="count">10 条 · 2 收藏</span><span class="storage">· 存储</span><span class="ver">· v1.3.0</span><span class="grow"></span><span class="mode">单击粘贴</span><button class="live" data-role="live"><i></i><span data-role="livetext">监听中</span></button></div>
+      <div class="modal" data-role="modal" hidden>
+        <div class="scrim" data-role="scrim"></div>
+        <div class="dialog" role="dialog" aria-modal="true" aria-label="设置">
+          <div class="dlghead"><span class="t">设置</span><span class="ver">v1.3.0</span><button class="iconbtn" data-role="modal-close" aria-label="关闭设置"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+          <div class="dlgbody">
+            <div class="sect"><h3>外观</h3>
+              <div class="srow"><span class="label">深色模式</span><button class="sw" data-role="switch" data-sw="theme" role="switch" aria-checked="false" aria-label="深色模式"><i></i></button></div>
+            </div>
+            <div class="sect"><h3>通用</h3>
+              <div class="srow"><span class="label">开机自启动</span><button class="sw" data-role="switch" data-sw="autostart" role="switch" aria-checked="false" aria-label="开机自启动"><i></i></button></div>
+              <div class="srow"><span class="label">保留天数</span><span class="val">30 天</span></div>
+            </div>
+            <div class="sect"><h3>快捷键</h3>
+              <div class="srow"><span class="label">唤出热键</span><span class="keys" title="Ctrl+Shift+V" aria-label="Ctrl+Shift+V"><kbd>Ctrl</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>V</kbd></span></div>
+            </div>
+            <div class="sect"><h3>隐私</h3>
+              <div class="srow"><span class="label">自动识别内容类型</span><button class="sw" data-role="switch" data-sw="detect" role="switch" aria-checked="true" aria-label="自动识别内容类型"><i></i></button></div>
+            </div>
+            <div class="sect"><h3>数据</h3>
+              <div class="srow"><span class="label">存储位置</span><span class="val">D:\示例目录</span></div>
+              <div class="srow"><span class="label">清空历史</span><span class="keys" data-role="clear-confirm" hidden><button class="mini danger" data-role="clear-yes">确认清空</button><button class="mini" data-role="clear-no">取消</button></span><button class="dangerbtn" data-role="clear">清空历史</button></div>
+            </div>
+            <div class="sect"><h3>关于</h3>
+              <div class="srow"><span class="label">版本</span><span class="val">v1.3.0</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ C · 雾绿工作台 ============================ -->
+  <section class="col" data-variant="c" data-theme="light">
+    <div class="colhead"><span class="code">C</span><h2>雾绿工作台</h2><span class="draft">阶段 2 · 定稿</span><button class="themetog" data-role="theme" data-requires-js aria-label="切换本列浅深">浅色</button></div>
+    <p class="colmeta">浅矿物灰 + 雾绿 · 无描边、无侧边竖条 · 圆角 14px、60px 行高、1.7 行距、12px 行间隙 · 靠明度与柔和投影分层 · 低对比 pill</p>
+    <ul class="assumptions" data-role="assumptions">
+      <li><b>C1</b>去掉描边、靠明度分层更柔和但不丢层级。<span class="how">怎么看：能不能找到「卡片边框」。</span></li>
+      <li><b>C2</b>60px 行高与 1.7 行距更好读，但一屏条数更少。<span class="how">怎么看：可读性与容量的取舍是否划算。</span></li>
+      <li><b>C3</b>低彩度雾绿做强调仍然保持专注。<span class="how">怎么看：强调色有没有抢走注意力。</span></li>
+    </ul>
+    <div class="panel" data-role="panel" data-scene="s1">
+      <div class="titlebar" data-role="titlebar">
+        <span class="brand">剪贴板</span>
+        <button class="iconbtn" data-role="pin" aria-label="置顶"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1z"/></svg></button>
+        <button class="iconbtn" data-role="keep" aria-label="保持打开"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M3 9h18"/></svg></button>
+        <button class="iconbtn" data-role="band" aria-label="连续粘贴"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></button>
+        <button class="iconbtn" data-role="settings" aria-label="设置"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <span class="winctl"><button class="winbtn" aria-label="最小化"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/></svg></button><button class="winbtn" aria-label="最大化"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" rx="1.5"/></svg></button><button class="winbtn" aria-label="关闭"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>
+      </div>
+      <div class="searchrow" data-role="search"><span class="searchbox"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><input type="text" placeholder="搜索剪贴板…" aria-label="搜索剪贴板"></span></div>
+      <div class="tabs" data-role="tabs">
+        <button class="tab" data-role="tab" data-tab="all" aria-selected="true">全部</button>
+        <button class="tab" data-role="tab" data-tab="fav" aria-selected="false">收藏</button>
+        <button class="tab" data-role="tab" data-tab="g:a" aria-selected="false">示例分组 A</button>
+        <button class="tab" data-role="tab" data-tab="g:b" aria-selected="false">示例分组 B</button>
+        <button class="tab" data-role="addgroup" data-requires-js aria-label="新建分组"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      </div>
+      <div class="list" data-role="list">
+        <div class="row" data-role="row" data-n="01" data-type="text" data-group="a" tabindex="0">
+          <span data-role="idx">01</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">npm run tauri build</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="gico"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span data-role="time">刚刚</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="02" data-type="link" data-selected="1" tabindex="0">
+          <span data-role="idx">02</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+          <div data-role="body"><p data-role="title">https://example.test/docs/build</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="time">12 分钟前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="03" data-type="image" data-group="b" tabindex="0">
+          <span data-role="idx">03</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></span><span data-role="thumb"></span>
+          <div data-role="body"><p data-role="title">示例图片 · 1440 × 900 · 268 KB</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="gico"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span data-role="time">26 分钟前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="04" data-type="file" data-group="b" tabindex="0">
+          <span data-role="idx">04</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+          <div data-role="body"><p data-role="title">示例报表.xlsx</p><p data-role="sub">3 个文件 · D:\示例目录\示例报表.xlsx</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="gico"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span data-role="time">1 小时前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="05" data-type="text" tabindex="0">
+          <span data-role="idx">05</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">示例文本 05（虚构内容，用于演示收藏态）</p></div>
+          <div data-role="meta"><button data-role="star" data-on aria-label="取消收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="time">2 小时前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="06" data-type="text" data-group="a" tabindex="0">
+          <span data-role="idx">06</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">示例文本 06（虚构内容）</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="gico"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span data-role="time">3 小时前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="07" data-type="link" data-group="a" tabindex="0">
+          <span data-role="idx">07</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+          <div data-role="body"><p data-role="title">https://example.test/start</p></div>
+          <div data-role="meta"><button data-role="star" data-on aria-label="取消收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="gico"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span><span data-role="time">5 小时前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="08" data-type="text" tabindex="0">
+          <span data-role="idx">08</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt; &amp; 引号 &quot; ' 的转义用例</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="time">8 小时前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="09" data-type="text" tabindex="0">
+          <span data-role="idx">09</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">示例文本 09（虚构内容）</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="time">1 天前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="row" data-role="row" data-n="10" data-type="text" tabindex="0">
+          <span data-role="idx">10</span><span data-role="ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg></span>
+          <div data-role="body"><p data-role="title">示例文本 10（虚构内容）</p></div>
+          <div data-role="meta"><button data-role="star" aria-label="收藏"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><span data-role="time">2 天前</span><span data-role="acts" data-requires-js><button class="actbtn" data-role="preview" aria-label="预览"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button><button class="actbtn" data-role="fav" aria-label="收藏"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button><button class="actbtn" data-role="group" aria-label="分组"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button><button class="actbtn" data-role="del" aria-label="删除"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button></span><span data-role="confirm"><span>确认删除？</span><button class="mini danger" data-role="del-yes">删除</button><button class="mini" data-role="del-no">取消</button></span></div>
+        </div>
+        <div class="empty" data-role="empty" data-empty="none" hidden>
+          <span class="eico"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span>
+          <p class="etitle">暂无剪贴板记录</p>
+          <p class="edesc">复制内容后将自动出现在这里</p>
+        </div>
+        <div class="empty" data-role="empty" data-empty="search" hidden>
+          <span class="eico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg></span>
+          <p class="etitle">没有匹配「<span data-role="q"></span>」的记录</p>
+          <p class="edesc">换个关键词试试</p>
+          <button class="ghost" data-role="clear-search">清空搜索</button>
+        </div>
+        <div class="empty" data-role="empty" data-empty="fav" hidden>
+          <span class="eico"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+          <p class="etitle">还没有收藏</p>
+          <p class="edesc">点条目上的 ☆ 把常用内容收进来</p>
+        </div>
+        <div class="empty" data-role="empty" data-empty="group" hidden>
+          <span class="eico"><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" stroke="none" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+          <p class="etitle">这个分组还是空的</p>
+          <p class="edesc">点条目上的文件夹图标把内容归进来</p>
+        </div>
+      </div>
+      <div class="log" data-role="log" hidden></div>
+      <div class="statusbar" data-role="statusbar"><span data-role="count">10 条 · 2 收藏</span><span class="storage">· 存储</span><span class="ver">· v1.3.0</span><span class="grow"></span><span class="mode">单击粘贴</span><button class="live" data-role="live"><i></i><span data-role="livetext">监听中</span></button></div>
+      <div class="modal" data-role="modal" hidden>
+        <div class="scrim" data-role="scrim"></div>
+        <div class="dialog" role="dialog" aria-modal="true" aria-label="设置">
+          <div class="dlghead"><span class="t">设置</span><span class="ver">v1.3.0</span><button class="iconbtn" data-role="modal-close" aria-label="关闭设置"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+          <div class="dlgbody">
+            <div class="sect"><h3>外观</h3>
+              <div class="srow"><span class="label">深色模式</span><button class="sw" data-role="switch" data-sw="theme" role="switch" aria-checked="false" aria-label="深色模式"><i></i></button></div>
+            </div>
+            <div class="sect"><h3>通用</h3>
+              <div class="srow"><span class="label">开机自启动</span><button class="sw" data-role="switch" data-sw="autostart" role="switch" aria-checked="false" aria-label="开机自启动"><i></i></button></div>
+              <div class="srow"><span class="label">保留天数</span><span class="val">30 天</span></div>
+            </div>
+            <div class="sect"><h3>快捷键</h3>
+              <div class="srow"><span class="label">唤出热键</span><span class="keys" title="Ctrl+Shift+V" aria-label="Ctrl+Shift+V"><kbd>Ctrl</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>V</kbd></span></div>
+            </div>
+            <div class="sect"><h3>隐私</h3>
+              <div class="srow"><span class="label">自动识别内容类型</span><button class="sw" data-role="switch" data-sw="detect" role="switch" aria-checked="true" aria-label="自动识别内容类型"><i></i></button></div>
+            </div>
+            <div class="sect"><h3>数据</h3>
+              <div class="srow"><span class="label">存储位置</span><span class="val">D:\示例目录</span></div>
+              <div class="srow"><span class="label">清空历史</span><span class="keys" data-role="clear-confirm" hidden><button class="mini danger" data-role="clear-yes">确认清空</button><button class="mini" data-role="clear-no">取消</button></span><button class="dangerbtn" data-role="clear">清空历史</button></div>
+            </div>
+            <div class="sect"><h3>关于</h3>
+              <div class="srow"><span class="label">版本</span><span class="val">v1.3.0</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<noscript><p style="padding:12px;font-size:12.5px">本预览的交互需要 JavaScript；当前为静态展示。</p></noscript>
+
+<!-- 阶段 2 唯一的脚本：静态 DOM 始终是唯一真相源；脚本只从 DOM 读初始状态、只挂事件委托，不重绘首屏 -->
+<script>
+(function(){
+'use strict';
+document.documentElement.className = 'js';
+
+var panels = [];
+
+function createPanel(root){
+  var list    = root.querySelector('[data-role="list"]');
+  var input   = root.querySelector('[data-role="search"] input');
+  var log     = root.querySelector('[data-role="log"]');
+  var modal   = root.querySelector('[data-role="modal"]');
+  var liveBtn = root.querySelector('[data-role="live"]');
+  var liveTxt = root.querySelector('[data-role="livetext"]');
+  var clearBox= modal ? modal.querySelector('[data-role="clear-confirm"]') : null;
+
+  var state = { tab:'all', query:'', theme: root.getAttribute('data-theme') || 'light', extra:0 };
+  var selTab = root.querySelector('[data-role="tab"][aria-selected="true"]');
+  if(selTab) state.tab = selTab.getAttribute('data-tab') || 'all';
+
+  function each(nodes, fn){ Array.prototype.forEach.call(nodes, fn); }
+  function rows(){ return list.querySelectorAll('[data-role="row"]'); }
+  function isFav(row){ var s = row.querySelector('[data-role="star"]'); return !!(s && s.hasAttribute('data-on')); }
+  function hay(row){
+    var t = row.querySelector('[data-role="title"]');
+    var s = row.querySelector('[data-role="sub"]');
+    return ((t ? t.textContent : '') + ' ' + (s ? s.textContent : '')).toLowerCase();
+  }
+
+  function apply(){
+    var q = state.query.trim().toLowerCase(), shown = 0;
+    each(rows(), function(row){
+      var ok = true;
+      if(state.tab === 'fav') ok = isFav(row);
+      else if(state.tab.indexOf('g:') === 0) ok = (row.getAttribute('data-group') || '') === state.tab.slice(2);
+      if(ok && q) ok = hay(row).indexOf(q) !== -1;
+      row.hidden = !ok;
+      if(ok) shown++;
+    });
+    var kind = '';
+    if(!shown){
+      if(q) kind = 'search';
+      else if(state.tab === 'fav') kind = 'fav';
+      else if(state.tab !== 'all') kind = 'group';
+      else kind = 'none';
+    }
+    each(root.querySelectorAll('[data-role="empty"]'), function(el){
+      el.hidden = el.getAttribute('data-empty') !== kind;
+    });
+    var qEl = root.querySelector('[data-role="q"]');
+    if(qEl) qEl.textContent = state.query.trim();
+    var n = 0, f = 0;
+    each(rows(), function(r){ n++; if(isFav(r)) f++; });
+    var cEl = root.querySelector('[data-role="count"]');
+    if(cEl) cEl.textContent = n + ' 条 · ' + f + ' 收藏';
+  }
+
+  function setTab(tab){
+    state.tab = tab;
+    each(root.querySelectorAll('[data-role="tab"]'), function(b){
+      b.setAttribute('aria-selected', b.getAttribute('data-tab') === tab ? 'true' : 'false');
+    });
+    apply();
+  }
+
+  function setTheme(theme){
+    state.theme = theme;
+    root.setAttribute('data-theme', theme);
+    var b = root.querySelector('[data-role="theme"]');
+    if(b) b.textContent = theme === 'dark' ? '深色' : '浅色';
+    var sw = modal ? modal.querySelector('[data-sw="theme"]') : null;
+    if(sw) sw.setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
+  }
+
+  function paste(row){
+    if(row.hasAttribute('data-confirm')) return;
+    each(rows(), function(r){ r.removeAttribute('data-selected'); });
+    row.setAttribute('data-selected','1');
+    row.setAttribute('data-pasted','1');
+    window.setTimeout(function(){ if(row.parentNode) row.removeAttribute('data-pasted'); }, 600);
+    if(log){
+      var line = document.createElement('span');
+      line.className = 'logline';
+      line.setAttribute('data-role','logline');
+      line.textContent = '粘贴 · #' + (row.getAttribute('data-n') || '');
+      each(log.querySelectorAll('[data-role="logline"]'), function(l, i, all){
+        l.removeAttribute('data-latest');
+        if(i < all.length - 2) l.remove();
+      });
+      line.setAttribute('data-latest','1');
+      log.appendChild(line);
+      log.hidden = false;
+    }
+  }
+
+  function toggleStar(row){
+    var s = row.querySelector('[data-role="star"]');
+    if(!s) return;
+    if(s.hasAttribute('data-on')){ s.removeAttribute('data-on'); s.setAttribute('aria-label','收藏'); }
+    else { s.setAttribute('data-on',''); s.setAttribute('aria-label','取消收藏'); }
+    apply();
+  }
+
+  function openConfirm(row){
+    each(rows(), function(r){ r.removeAttribute('data-confirm'); });
+    row.setAttribute('data-confirm','1');
+    var y = row.querySelector('[data-role="del-yes"]');
+    if(y) y.focus();
+  }
+  function closeConfirm(row){ row.removeAttribute('data-confirm'); }
+  function removeRow(row){ if(row.parentNode) row.parentNode.removeChild(row); apply(); }
+
+  function openModal(){
+    if(!modal) return;
+    modal.hidden = false;
+    var b = modal.querySelector('[data-role="modal-close"]');
+    if(b) b.focus();
+  }
+  function closeModal(){
+    if(!modal) return;
+    modal.hidden = true;
+    if(clearBox) clearBox.hidden = true;
+    var g = root.querySelector('[data-role="settings"]');
+    if(g) g.focus();
+  }
+
+  function clearSearch(){ if(input) input.value = ''; state.query = ''; setTab('all'); }
+
+  function addGroup(){
+    var letter = 'CDEFG'.charAt(state.extra) || 'C';
+    state.extra++;
+    var key = 'g:extra' + state.extra;
+    var btn = document.createElement('button');
+    btn.className = 'tab';
+    btn.setAttribute('data-role','tab');
+    btn.setAttribute('data-tab', key);
+    btn.setAttribute('aria-selected','false');
+    btn.textContent = '示例分组 ' + letter;
+    var add = root.querySelector('[data-role="addgroup"]');
+    if(add && add.parentNode) add.parentNode.insertBefore(btn, add);
+    setTab(key);
+  }
+
+  function toggleLive(){
+    if(!liveBtn) return;
+    if(liveBtn.hasAttribute('data-paused')){
+      liveBtn.removeAttribute('data-paused');
+      if(liveTxt) liveTxt.textContent = '监听中';
+    } else {
+      liveBtn.setAttribute('data-paused','');
+      if(liveTxt) liveTxt.textContent = '已暂停';
+    }
+  }
+
+  function toggleSwitch(el){
+    var on = el.getAttribute('aria-checked') === 'true';
+    el.setAttribute('aria-checked', on ? 'false' : 'true');
+    if(el.getAttribute('data-sw') === 'theme') setTheme(on ? 'light' : 'dark');
+  }
+
+  root.addEventListener('click', function(e){
+    var el = e.target && e.target.closest ? e.target.closest('[data-role]') : null;
+    if(!el || !root.contains(el)) return;
+    var role = el.getAttribute('data-role');
+    var row = el.closest('[data-role="row"]');
+    if(role === 'theme'){ setTheme(state.theme === 'dark' ? 'light' : 'dark'); return; }
+    if(role === 'tab'){ setTab(el.getAttribute('data-tab')); return; }
+    if(role === 'addgroup'){ addGroup(); return; }
+    if(role === 'clear-search'){ clearSearch(); return; }
+    if(role === 'star' || role === 'fav'){ if(row) toggleStar(row); return; }
+    if(role === 'del'){ if(row) openConfirm(row); return; }
+    if(role === 'del-yes'){ if(row) removeRow(row); return; }
+    if(role === 'del-no'){ if(row) closeConfirm(row); return; }
+    if(role === 'settings'){ openModal(); return; }
+    if(role === 'modal-close' || role === 'scrim'){ closeModal(); return; }
+    if(role === 'switch'){ toggleSwitch(el); return; }
+    if(role === 'clear'){ if(clearBox) clearBox.hidden = false; return; }
+    if(role === 'clear-yes' || role === 'clear-no'){ if(clearBox) clearBox.hidden = true; return; }
+    if(role === 'live'){ toggleLive(); return; }
+    if(row && !el.closest('[data-role="meta"]')) paste(row);
+  });
+
+  root.addEventListener('input', function(e){
+    if(!input || e.target !== input) return;
+    state.query = input.value;
+    apply();
+  });
+
+  root.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    var t = e.target;
+    if(!t || !t.closest) return;
+    var row = t.closest('[data-role="row"]');
+    if(row && t === row){ e.preventDefault(); paste(row); }
+  });
+
+  function busy(){
+    return !!root.querySelector('.row[data-confirm]') || !!(modal && !modal.hidden) || !!(input && input.value !== '');
+  }
+
+  function escape(){
+    var row = root.querySelector('.row[data-confirm]');
+    if(row){
+      row.removeAttribute('data-confirm');
+      var d = row.querySelector('[data-role="del"]');
+      if(d) d.focus();
+      return true;
+    }
+    if(modal && !modal.hidden){
+      if(clearBox && !clearBox.hidden){ clearBox.hidden = true; return true; }
+      closeModal();
+      return true;
+    }
+    if(input && input.value){ clearSearch(); return true; }
+    return false;
+  }
+
+  setTheme(state.theme);
+  return { root: root, busy: busy, escape: escape };
+}
+
+each(document.querySelectorAll('.col[data-variant]'), function(root){ panels.push(createPanel(root)); });
+
+function each(nodes, fn){ Array.prototype.forEach.call(nodes, fn); }
+
+document.addEventListener('keydown', function(e){
+  var active = document.activeElement;
+  var col = active && active.closest ? active.closest('.col[data-variant]') : null;
+  if(e.key === 'Escape'){
+    var target = null, i;
+    if(col){
+      for(i = 0; i < panels.length; i++){ if(panels[i].root === col){ target = panels[i]; break; } }
+    }
+    if(!target){
+      for(i = 0; i < panels.length; i++){ if(panels[i].busy()){ target = panels[i]; break; } }
+    }
+    if(target && target.escape()) e.preventDefault();
+    return;
+  }
+  if((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')){
+    if(!col) return;
+    var box = col.querySelector('[data-role="search"] input');
+    if(box){ e.preventDefault(); box.focus(); }
+  }
+});
+})();
+</script>
+</body>
+</html>
