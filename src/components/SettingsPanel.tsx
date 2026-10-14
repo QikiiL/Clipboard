@@ -871,7 +871,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
       {/* 清空历史确认弹窗(居中) */}
       {clearConfirmOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50">
-          <div className="bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-xs mx-4 overflow-hidden">
+          <div className="clip-dialog bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-xs mx-4 overflow-hidden">
             <div className="px-5 pt-3.5 pb-3 border-b border-hairline">
               <h3 className="text-sm font-semibold">清空剪贴板历史</h3>
             </div>

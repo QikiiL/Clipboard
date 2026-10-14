@@ -103,7 +103,7 @@ export function GroupTabs() {
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
             <div
-              className="fixed z-50 min-w-[120px] bg-surface rounded-lg shadow-dialog border border-hairline py-1"
+              className="clip-dialog fixed z-50 min-w-[120px] bg-surface rounded-lg shadow-dialog border border-hairline py-1"
               style={{ left: menu.x, top: menu.y }}
             >
               <button

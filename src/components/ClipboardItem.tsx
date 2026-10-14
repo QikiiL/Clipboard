@@ -321,7 +321,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
                 top: previewY,
               }}
             >
-              <div className="bg-surface rounded-lg shadow-dialog border border-hairline p-2">
+              <div className="clip-dialog bg-surface rounded-lg shadow-dialog border border-hairline p-2">
                 <img
                   src={imageSrc}
                   alt="[图片预览]"
@@ -469,11 +469,11 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
               title="富文本预览"
               sandbox=""
               srcDoc={buildRichPreviewSrcDoc(tipRichHtml)}
-              className="block w-[320px] h-[200px] rounded-lg shadow-dialog border border-hairline bg-white"
+              className="clip-dialog block w-[320px] h-[200px] rounded-lg shadow-dialog border border-hairline bg-white"
             />
           ) : (
             <div
-              className="bg-surface rounded-lg shadow-dialog border border-hairline px-3 py-2 max-w-[320px] overflow-y-auto"
+              className="clip-dialog bg-surface rounded-lg shadow-dialog border border-hairline px-3 py-2 max-w-[320px] overflow-y-auto"
               style={{ maxHeight: contentTip.maxHeight }}
             >
               <p className="text-[12.5px] leading-relaxed text-ink whitespace-pre-wrap break-words select-text">
@@ -487,7 +487,7 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
         <>
           <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setGroupMenuOpen(false); }} />
           <div
-            className="absolute right-[10px] top-full mt-1 z-50 min-w-[140px] bg-surface rounded-lg shadow-dialog border border-hairline py-1"
+            className="clip-dialog absolute right-[10px] top-full mt-1 z-50 min-w-[140px] bg-surface rounded-lg shadow-dialog border border-hairline py-1"
             onClick={(e) => e.stopPropagation()}
           >
             <button

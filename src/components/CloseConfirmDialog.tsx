@@ -26,7 +26,7 @@ export function CloseConfirmDialog({ isOpen, onChoice, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-sm mx-4 overflow-hidden">
+      <div className="clip-dialog bg-surface rounded-[14px] shadow-dialog border border-hairline w-full max-w-sm mx-4 overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-3.5 pb-3 border-b border-hairline">
           <h2 className="text-sm font-semibold">关闭确认</h2>

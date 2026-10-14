@@ -359,6 +359,181 @@ html[data-style="swiss"] :focus-visible { outline-offset: -2px; }
   html[data-style="swiss"] .clip-row { padding: 0 14px; }
 }
 
+/* ══ C · 雾绿工作台 组件差异 ══════════════════════════════════════════════════
+   值逐字照抄 preview §⑤ C 段(行 152–175)与方案 §3.3/§3.4,选择器前缀统一为
+   html[data-style="mist"](0,2,1);深色块写成 (0,3,1) 并放在本段最后,把"柔和投影"
+   换成 1px 内描边(preview 行 172–175)。
+
+   为什么 0,2,1 就够(同 A 段):本段写在 @layer 之外,未分层的规则在层叠中恒胜
+   @layer utilities 里的工具类(与优先级无关);容器查询也不改变优先级,所以
+   @max-narrow:min-h-[46px] / @min-wide:min-h-[60px] / hover:bg-surface /
+   hover:border-hairline 这类变体一律被压住。浮笺(fuji)不匹配这里任何一条选择器
+   → 默认态零影响。
+
+   投影为什么一半用令牌一半写字面值:C 令牌块的 --lift / --lift-hover(b854d2a)
+   就是照 preview ⑤ C 的两条配方落的值 —— 面板与行 hover 与 preview 逐字相同,
+   直接用令牌(深色自动变描边);而行 / 搜索框的**基础**投影 preview 用的是更紧的
+   `0 1px 2px`(令牌没有对应项),故写字面值并显式补深色档。 */
+
+/* 面板:柔和投影(preview 行 153);深色下同一令牌自动变描边(行 172) */
+html[data-style="mist"] .clip-panel { box-shadow: var(--lift); }
+
+/* 标题栏:去掉下边线(方案 §3.3 行 180;preview C 段不写 titlebar 规则 = 无下边线) */
+html[data-style="mist"] .clip-titlebar { border-bottom-width: 0; }
+
+/* 搜索行 / 搜索框:左右 12px、28px 高、胶囊、--surface 底 + 柔和投影;
+   focus 换成 2px accent-soft 环(preview 行 154–156)。原 focus-within:ring-[3px]
+   是 box-shadow 合成的 ring → 整条覆写 box-shadow 即可清掉。 */
+html[data-style="mist"] .clip-searchrow { padding: 0 12px; }
+html[data-style="mist"] .clip-searchbox {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px oklch(60% 0.02 165 / 0.10);
+}
+html[data-style="mist"] .clip-searchbox:focus-within {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+/* 深色两档:基础态改描边(行 173);focus 环与浅色同款,必须重写一次 ——
+   否则与基础态同分(0,3,1)且写在后面,会把 focus 环顶掉 */
+html[data-style="mist"].dark .clip-searchbox {
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+html[data-style="mist"].dark .clip-searchbox:focus-within {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* 页签:低对比 pill —— 容器无底无框、gap 6px、padding 2px 12px 8px;
+   页签 pill 化、选中 --sel 底 + text-ink + 600 字重(preview 行 157–159 / 方案 §3.3 行 178)。
+   只选 [data-selected](React 恒渲染该属性,值为 "true"/"false")。 */
+html[data-style="mist"] .clip-tabs {
+  gap: 6px;
+  padding: 2px 12px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+html[data-style="mist"] .clip-tabs > button[data-selected] {
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+html[data-style="mist"] .clip-tabs > button[data-selected="true"] {
+  background: var(--sel);
+  color: var(--text);
+  font-weight: 600;
+}
+/* 尾部"新建分组"按钮:preview 里它同样带 .tab(行 239/371)→ C 段也是 pill。
+   React 已是 rounded-full,这里显式写 999px 把 C 的 pill 语言钉住(值同现状,零视觉变化)。 */
+html[data-style="mist"] .clip-tabs > button:not([data-selected]) { border-radius: 999px; }
+
+/* 列表:4px 12px 2px(preview 行 160) */
+html[data-style="mist"] .clip-list { padding: 4px 12px 2px; }
+
+/* 行包裹层:12px 行间隙。虚拟行用绝对定位 top 排布、行高由 measureElement 量**外层包裹层**
+   → 间隙必须落在 wrap 的 padding-bottom(margin 会与 top 叠加导致错位)。
+   量出 60+12=72,与 lib/uiStyle.ts 的 rowEstimate('mist') 一致。 */
+html[data-style="mist"] .clip-row-wrap { padding-bottom: 12px; }
+
+/* 行:卡片化 —— 60px / var(--radius)=14px / 无描边 / --surface 底 + 柔和投影(preview 行 161–162)。
+   box-shadow 整条覆写:框选选中态是 ring-2 ring-accent(box-shadow 合成),逐个清 --tw-ring-* 不可靠。
+   border-width:0 = 方案 §3.3 行 168「border 全去」,hover:border-hairline 随之失效。 */
+html[data-style="mist"] .clip-row {
+  min-height: 60px;
+  padding: 0 12px;
+  border-width: 0;
+  border-radius: var(--radius);
+  line-height: 1.7;
+  background: var(--surface);
+  box-shadow: 0 1px 2px oklch(60% 0.02 165 / 0.07);
+}
+html[data-style="mist"] .clip-row:hover {
+  background: var(--hover);
+  box-shadow: var(--lift-hover);
+}
+html[data-style="mist"] .clip-row[data-selected] { background: var(--sel); }
+/* 已粘贴:--sel-paste + 2px accent 环。--sel-paste 本身已是"已粘贴"语义色,再叠 50% 透明
+   会把它洗淡(preview 无透明)→ 显式还原 opacity:1(与 A 段同一决策) */
+html[data-style="mist"] .clip-row[data-pasted] {
+  background: var(--sel-paste);
+  box-shadow: 0 0 0 2px var(--accent);
+  opacity: 1;
+}
+/* 深色:基础态投影不可见 → 改 1px 内描边(preview 行 174–175)。写在最后,与 preview 同序:
+   行 hover 走 --lift-hover(深色即同一条描边),已粘贴的 2px 环在深色下也被这条接管
+   —— 与 preview 的层叠结果一致(其深色块同分靠后,同样顶掉了 2px 环)。 */
+html[data-style="mist"].dark .clip-row { box-shadow: inset 0 0 0 1px var(--hair); }
+
+/* 序号栏:窄号 12px faint(方案 §3.4 行 212 / preview 行 163),不占 A 的 34px */
+html[data-style="mist"] .clip-idx {
+  display: block;
+  flex: none;
+  min-width: 16px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+/* 类型图标列:26px → 16px(方案 §3.3 行 171,A/C 同值) */
+html[data-style="mist"] .clip-ico { width: 16px; }
+
+/* 悬停操作按钮(R1):与 A 段同款 —— 沿用浮笺的宽度动画展开,只改视觉:
+   · padding-left 8px(展开宽度基准,压掉 @max-narrow:pl-1 的 4px)
+   · 展开宽度 94px = 8 + 4×20 + 3×2(压掉工具类的 118 / 98 / 130px)
+   · 按钮 20px 见方、圆角 var(--radius)=14px(preview 行 82 的 .actbtn 用 var(--radius))
+   width / overflow / transition 三个交互属性一概不动。 */
+html[data-style="mist"] .clip-actions-wrap { padding-left: 8px; }
+html[data-style="mist"] .clip-row:hover .clip-actions-wrap,
+html[data-style="mist"] .clip-row:focus-within .clip-actions-wrap {
+  width: 94px;
+}
+html[data-style="mist"] .clip-actions > button {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius);
+}
+
+/* 状态栏:去掉上边线、左右 12px(preview 行 170 / 方案 §3.3 行 181) */
+html[data-style="mist"] .clip-statusbar {
+  padding: 0 12px;
+  border-top-width: 0;
+}
+
+/* 空态:留白更大 64px、行距 1.8(preview 行 171) */
+html[data-style="mist"] .clip-empty {
+  padding: 64px 24px;
+  line-height: 1.8;
+}
+
+/* 弹窗 / 气泡 / 菜单:圆角 var(--radius)=14px(≈现状 14px,显式收口;方案 §3.3 行 183)。
+   hook 已补到 CloseConfirmDialog / UpdateDialog / StatusBar 两张通知卡 /
+   SettingsPanel 清空确认 / GroupTabs 右键菜单 / ClipboardItem 三个气泡。 */
+html[data-style="mist"] .clip-dialog { border-radius: var(--radius); }
+
+/* 设置面板 Card(rounded-[13px],按方案 §3.2 不加 hook):父级选择器收口到 14px。
+   用 Card 唯一的静态工具类 divide-y 定位,只覆盖 border-radius,不碰尺寸与颜色(风险 R7)。 */
+html[data-style="mist"] .clip-dialog .divide-y { border-radius: var(--radius); }
+
+/* 连续粘贴横幅:圆角 14px(方案 §3.3 行 182;其余保留) */
+html[data-style="mist"] .clip-continuous-bar { border-radius: var(--radius); }
+
+/* C · 容器查询两档(方案 §3.4 末段 / preview §⑥ 行 178–201)。
+   关键:两档都**不动 min-height** —— C 行高恒为 60px,窄档也不降(React 的
+   @max-narrow:min-h-[46px] 在 utilities 层,已被上面的未分层规则压住;这里再显式钉一次,
+   避免将来层叠顺序变动时静默变矮)。 */
+@container (max-width: 22.5rem) {
+  html[data-style="mist"] .clip-list { padding: 2px 6px; }
+  html[data-style="mist"] .clip-tabs { padding: 2px 6px 6px; }
+  html[data-style="mist"] .clip-searchrow { padding: 0 6px; }
+  html[data-style="mist"] .clip-statusbar { padding: 0 6px; }
+  html[data-style="mist"] .clip-row { min-height: 60px; }
+}
+@container (min-width: 32.5rem) {
+  html[data-style="mist"] .clip-list { padding: 6px 16px 4px; }
+  html[data-style="mist"] .clip-row { padding: 0 14px; }
+}
+
 /* 面板宽度自适应断点(容器查询)。面板宽度只有 370~600px,
    1366/1920/3840 之类的视口断点永远不会触发,故按“面板自身宽度”分三档:
    窄 < 22.5rem(360px) / 标准 / 宽 ≥ 32.5rem(520px)。

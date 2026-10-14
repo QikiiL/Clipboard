@@ -207,7 +207,7 @@ export function StatusBar() {
               role="status"
               aria-live="polite"
               aria-label="排除规则提示"
-              className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3 @max-narrow:p-4 @max-narrow:max-w-[92%]"
+              className="clip-dialog pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3 @max-narrow:p-4 @max-narrow:max-w-[92%]"
             >
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-warn flex-shrink-0" aria-hidden="true" />
@@ -241,7 +241,7 @@ export function StatusBar() {
               role="status"
               aria-live="polite"
               aria-label="验证码已复制提示"
-              className="pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3 @max-narrow:p-4 @max-narrow:max-w-[92%]"
+              className="clip-dialog pointer-events-auto bg-surface rounded-[14px] shadow-dialog border border-hairline p-5 max-w-[360px] flex flex-col items-center gap-3 @max-narrow:p-4 @max-narrow:max-w-[92%]"
             >
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-ok flex-shrink-0" aria-hidden="true" />
