@@ -12,5 +12,5 @@ cd /d D:\copy\clipboard-manager-tauri
 npm run tauri dev
 
 :: Keep the window open so failures stay visible (pause preserves errorlevel)
-echo [dev] 已退出，errorlevel=%errorlevel%，按任意键关闭窗口...
+echo [dev] exited with errorlevel=%errorlevel%. Press any key to close this window...
 pause
