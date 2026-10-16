@@ -724,7 +724,7 @@ dependencies = [
 
 [[package]]
 name = "clipboard-manager-tauri"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "arboard",
  "base64 0.22.1",
