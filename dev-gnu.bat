@@ -38,7 +38,7 @@ echo [dev-gnu]   copy a card-like number or an API token and watch the
 echo [dev-gnu]   status bar for the exclusion hint and its keep button.
 echo.
 
-npm run tauri dev
+call npm run tauri dev
 
 echo.
 echo [dev-gnu] Exited with code %errorlevel%

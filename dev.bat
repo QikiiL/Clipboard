@@ -9,7 +9,7 @@ if errorlevel 1 (
 
 :: Run tauri dev
 cd /d D:\copy\clipboard-manager-tauri
-npm run tauri dev
+call npm run tauri dev
 
 :: Keep the window open so failures stay visible (pause preserves errorlevel)
 echo [dev] exited with errorlevel=%errorlevel%. Press any key to close this window...
