@@ -8,7 +8,7 @@ if errorlevel 1 (
 )
 
 cd /d D:\copy\clipboard-manager-tauri
-npm run tauri build
+call npm run tauri build
 if errorlevel 1 (
     echo.
     echo Build FAILED
