@@ -185,7 +185,6 @@ SDK 10.0.26100.0)。
 | `dev.bat` / `dev-admin.bat` | 日常开发:加载环境并启动 `tauri dev`(admin 版以管理员运行,测试接管 `Win+V` 用) |
 | `build-release.bat` | 一键打包 NSIS 安装包并复制到项目根目录(自动取最新安装包,版本号升级无需改脚本) |
 | `measure-mem.ps1` | 后台内存占用测量 |
-| `dev-gnu.bat` | 历史遗留(GNU 工具链时代),现默认构建已回归 MSVC,不再推荐 |
 
 > **打包需要 [NSIS](https://nsis.sourceforge.io/)。** 没装的话 `tauri build` 会在最后的打包步骤失败,但 `src-tauri/target/release/clipboard-manager-tauri.exe` 已经生成——直接拷出来放进空文件夹就是便携版,首次运行会自动在同目录建立 `config/` 和 `data/`。
 
