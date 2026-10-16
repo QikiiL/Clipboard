@@ -26,7 +26,7 @@ cargo clippy               # Lint
 cargo test                 # Unit tests
 ```
 
-Note: on this machine use the GNU toolchain (`cargo +stable-x86_64-pc-windows-gnu`); `.cargo/config.toml` already pins the mingw ld workaround. MSVC (`cl.exe`) is not installed.
+Note: the default toolchain is MSVC (`stable-x86_64-pc-windows-msvc`), and `cl.exe`/`link.exe` are installed. `src-tauri/.cargo/config.toml` already pins the MSVC linker plus `CC`/`CXX`/`AR`/`INCLUDE`/`LIB`, so plain `cargo` works from any shell — no need to run `vcvars64.bat` manually (the `vcvars` calls in `dev.bat`/`build-release.bat` are legacy leftovers, harmless to keep). Do NOT use `cargo +stable-x86_64-pc-windows-gnu`.
 
 ## Architecture
 
