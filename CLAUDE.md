@@ -36,7 +36,7 @@ Note: the default toolchain is MSVC (`stable-x86_64-pc-windows-msvc`), and `cl.e
 
 2. **Tauri Events** (`listen()` in frontend): `clipboard-changed`, `item-deleted`, `monitoring-paused`, `groups-changed`, `ask-close-behavior`, `paste-mode-changed`
 
-**Dual SQLite connections** to the same file (`{APPDATA}/com.lyz.clipboard-manager-tauri/clipboard.db`):
+**Dual SQLite connections** to the same file (`data/clipboard.db` next to the exe — `app_data_dir_default()`; relocatable, see the storage pointer below):
 - Frontend: `@tauri-apps/plugin-sql` for SELECT queries (`src/lib/db.ts`, read-only helper `queryItems`)
 - Backend: `sqlx::SqlitePool` for INSERT/UPDATE/DELETE (`src-tauri/src/lib.rs`)
 - WAL mode + busy_timeout=5000 set at startup to prevent lock contention
@@ -89,7 +89,7 @@ Note: the default toolchain is MSVC (`stable-x86_64-pc-windows-msvc`), and `cl.e
 
 - WAL mode is required for dual-connection pattern; without it, SQLITE_BUSY errors occur
 - The 500ms suppress window in `paste_item` must be long enough for the paste to complete
-- `enigo` requires OS accessibility permissions on macOS/Linux
+- `enigo` injects Ctrl+V via SendInput, which cannot cross Windows integrity levels (UIPI): pasting into an elevated window requires the app itself to run elevated, which is why the manifest is `requireAdministrator`
 - Image `file_path` uses platform-native separators; DB URL converts to forward slashes
 - SQLite `datetime('now')` stores UTC; the frontend must parse it with a `Z` suffix or timestamps skew by the local offset
 - LIKE queries must pair `escapeLike()` with an `ESCAPE '\'` clause (see `queryBuilder.ts`)
@@ -97,7 +97,7 @@ Note: the default toolchain is MSVC (`stable-x86_64-pc-windows-msvc`), and `cl.e
 - Frontend `db.ts` calls `invoke('get_db_path')` to get the absolute path — don't hardcode `sqlite:clipboard.db`
 - ALL db/images paths must resolve through `storage_service::current_data_dir`/`images_dir` — never hardcode `app_config_dir`/`app_data_dir`; the user may have moved data to a custom dir. Migration only happens at cold start (no open SQLite connections); never copy `clipboard.db` while the app is running. The resolved images dir must also be granted at startup via `asset_protocol_scope().allow_directory()` — frontend thumbnails load through the asset protocol (`convertFileSrc`), whose config scope only covers the default `$APPDATA/images/*`
 - `std::fs::canonicalize` on Windows returns `\\?\`-prefixed extended paths — NEVER persist them (storage.json, DB columns) or build `sqlite:` URLs from them (`sqlite://?/D:/...` crashes the backend pool at startup). Use `storage_service::strip_extended_prefix`; the backend pool must connect via `SqliteConnectOptions::filename(path)`, not a URL string
-- `cargo test` binaries fail to launch in some shell environments (0xc0000139 or silent exit) even though the test profile compiles; pre-existing environment quirk — rely on `cargo check`/`clippy`, run `cargo test` from an interactive terminal
+- `build.rs` links `app.manifest` (`requestedExecutionLevel=requireAdministrator`) only into the main bin (`rustc-link-arg-bin`, with `new_without_app_manifest()` suppressing the default manifest), so the test bins inherit the elevation requirement and fail to launch without an elevated shell (`cargo test` -> bin target: os error 740, "the requested operation requires elevation"). `cargo test --lib` is unaffected and runs directly (86 passed / 4 ignored)
 
 ## Development Workflow
 
