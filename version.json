@@ -1,7 +1,7 @@
 {
-  "version": "1.4.1",
-  "notes": "修复：「粘贴后保持打开」时单击条目不粘贴、面板被其他窗口压到后面或置顶失效；面板重建后短暂失去置顶；其余为内部稳定性改动。",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.4.1",
+  "version": "1.4.2",
+  "notes": "优化：雾绿工作台风格下，搜索框与分组页签的上下间距更均衡、列表首屏更紧凑；顶部开关按钮（置顶 / 保持打开 / 连续粘贴）的开启态更清晰。其余为内部稳定性改动。",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.4.2",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }
