@@ -1,7 +1,7 @@
 {
   "version": "1.4.1",
   "notes": "修复：「粘贴后保持打开」时单击条目不粘贴、面板被其他窗口压到后面或置顶失效；面板重建后短暂失去置顶；其余为内部稳定性改动。",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.4.0",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.4.1",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }
