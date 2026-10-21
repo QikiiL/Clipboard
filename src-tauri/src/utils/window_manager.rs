@@ -28,6 +28,15 @@ pub fn show_or_create(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
         apply_pinned(app, &window);
+        // 首帧空窗:show() 到守护线程下一次巡检之间(≤200ms)面板已可见但可能
+        // 还没带上 WS_EX_TOPMOST,此时目标窗口一激活就把面板压到后面。pinned
+        // 开启时再无条件补一次(幂等,SWP_NOACTIVATE 不抢焦点),消掉这段空窗。
+        // 注意仍受 pinned 设置约束:用户关掉置顶时不得强行置顶
+        if load_settings(app).pinned {
+            if let Ok(h) = window.hwnd() {
+                crate::utils::input_focus::force_topmost(h.0 as isize);
+            }
+        }
         return;
     }
     spawn_create(app);
@@ -51,14 +60,15 @@ pub fn apply_pinned(app: &AppHandle, window: &tauri::WebviewWindow) {
     }
 }
 
-/// 置顶守护:面板可见期间每 500ms 核对 WS_EX_TOPMOST 真实样式,缺失立即
+/// 置顶守护:面板可见期间每 200ms 核对 WS_EX_TOPMOST 真实样式,缺失立即
 /// 用 Win32 直补(绕过 tao 账面,见 apply_pinned 注释)。覆盖两类丢失:
 /// 创建竞态让唯一一次置顶调用静默失败,以及外部窗口管理类软件在面板
 /// 使用期间剥除置顶。终端里反复出现的 re-applying 即丢失在持续发生,
-/// 可据此排查那台机器上的相关软件
+/// 可据此排查那台机器上的相关软件。间隔从 500ms 收到 200ms:窗口重建后
+/// 的"已可见但缺置顶"空窗越短越好,单次巡检只是两次 Win32 查询,开销可忽略
 pub fn spawn_topmost_guard(app: AppHandle) {
     std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(200));
         let Some(window) = app.get_webview_window("main") else {
             continue;
         };
@@ -188,6 +198,8 @@ pub fn create_main_window(app: &AppHandle, show_when_ready: bool) -> tauri::Resu
     if state.maximized {
         let _ = window.maximize();
     }
+    // build 之后、show 之前就落置顶:窗口此刻仍 visible(false),先把
+    // WS_EX_TOPMOST 带上,首帧可见即悬浮,不依赖 PageLoad / 守护线程补
     apply_pinned(app, &window);
 
     // 几何状态由移动/缩放事件实时持久化到独立文件(不进 AppSettings:
@@ -345,18 +357,29 @@ pub fn exit_app(app: &AppHandle) {
 /// tao 的可见性标志门槛或系统前台锁定静默吞掉,窗口"可见但非前台"——
 /// 下一次热键会被 toggle 判定为未聚焦而只走显示分支,表现为
 /// "第一次按键仅切焦点、第二次才隐藏"。这里异步轮询,未真正取得
-/// 前台焦点就重试 set_focus,最多约 1.5 秒;窗口期间被销毁则安静退出。
+/// 前台焦点就重试 set_focus,最多 15 次 × 50ms(约 0.75 秒,已足够覆盖
+/// tao 标志滞后);窗口期间被销毁则安静退出。
+///
+/// 两处提前返回:
+/// - 已真正取得焦点(tao 标志或原生前台比对成立)—— 目标达成;
+/// - [`input_focus::is_focus_handoff_active`] 为真 —— 应用正在把前台交给
+///   粘贴目标窗口(「粘贴后保持打开」),此时再 set_focus 会把焦点抢回面板,
+///   随后模拟的 Ctrl+V 就落进面板自己的搜索框(表现为"点了没粘贴")。
+///   正常路径下焦点已由 show()+set_focus() 给到,停手不影响聚焦。
 fn ensure_focus(window: tauri::WebviewWindow) {
     std::thread::spawn(move || {
         let hwnd = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
         for _ in 0..15 {
+            if crate::utils::input_focus::is_focus_handoff_active() {
+                return;
+            }
             if window.is_focused().unwrap_or(false)
                 || crate::utils::input_focus::is_foreground_window(hwnd)
             {
                 return;
             }
             let _ = window.set_focus();
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
     });
 }

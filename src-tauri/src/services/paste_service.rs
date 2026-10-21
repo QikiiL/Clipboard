@@ -247,8 +247,9 @@ pub enum Delivery {
 /// - KeepOpen(「粘贴后保持打开」开启):窗口不销毁,仅把前台焦点交给
 ///   粘贴落点 —— 面板留在屏幕上,方便连续粘贴多条。落点优先取唤出前
 ///   记录的目标窗口,没有记录(启动即建窗、托盘打开)或已失效时退回
-///   Z 序下第一个可激活窗口(对齐销毁路径的隐式激活);全部失败才
-///   降级为仅复制:此刻前台仍是本面板,模拟按键会落进自己的搜索框;
+///   Z 序下第一个可激活窗口(对齐销毁路径的隐式激活);两者都失败时
+///   退回 HideFirst 的销毁路径保证内容仍被粘贴,只有该路径也失败才
+///   降级为仅复制(此刻前台仍是本面板,模拟按键会落进自己的搜索框);
 /// - AtTarget(连续粘贴的全局触发):前台已经是目标应用,不动焦点 ——
 ///   粘贴总是落进用户当前光标所在的输入框。
 pub enum FocusHandling {
@@ -296,9 +297,10 @@ async fn refocus_target_keep_window(app_handle: &tauri::AppHandle) -> bool {
 }
 
 /// 销毁窗口并把前台焦点还给唤出前记录的目标窗口(不投递任何内容)。
-/// 单击条目投递的"先隐藏"分支与连续粘贴「只武装、不立即粘贴」的
-/// 启动路径共用
-pub async fn release_focus_to_target(app_handle: &tauri::AppHandle) {
+/// 单击条目投递的"先隐藏"分支、连续粘贴「只武装、不立即粘贴」的
+/// 启动路径,以及 keep-open 找不到落点时的降级路径共用。
+/// 返回是否已把前台交给一个可用目标(供降级路径判断要不要退回仅复制)
+pub async fn release_focus_to_target(app_handle: &tauri::AppHandle) -> bool {
     // 先销毁窗口(隐藏即销毁,WebView2 进程树随之退出),
     // 再主动把前台焦点还给唤出前的目标窗口并等待其真正就绪;
     // 若不等待,后续模拟的 Ctrl+V 会在焦点切换完成前发出而落空
@@ -307,12 +309,33 @@ pub async fn release_focus_to_target(app_handle: &tauri::AppHandle) {
         .state::<crate::utils::input_focus::PasteMode>()
         .target();
     if target_hwnd != 0 {
-        let _ = tauri::async_runtime::spawn_blocking(move || {
+        tauri::async_runtime::spawn_blocking(move || {
             crate::utils::input_focus::restore_target_focus(target_hwnd)
         })
-        .await;
+        .await
+        .unwrap_or(false)
     } else {
         tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        // 无记录目标:靠 Windows 销毁窗口后的隐式激活,前台非空即视为可用
+        crate::utils::input_focus::capture_foreground_hwnd() != 0
+    }
+}
+
+/// 焦点交接守卫:把前台交给外部目标窗口期间抑制 `ensure_focus` 抢回焦点。
+/// 用 Drop 实现,保证任何 return 路径(含 `?` 早退与 panic)都会解除抑制 ——
+/// 标志一旦永久残留,`ensure_focus` 将再也不会把焦点还给面板。
+struct FocusHandoffGuard;
+
+impl FocusHandoffGuard {
+    fn new() -> Self {
+        crate::utils::input_focus::begin_focus_handoff();
+        Self
+    }
+}
+
+impl Drop for FocusHandoffGuard {
+    fn drop(&mut self) {
+        crate::utils::input_focus::end_focus_handoff();
     }
 }
 
@@ -343,13 +366,42 @@ pub async fn deliver_item_by_id(
     };
 
     let mut do_paste = do_paste;
+    // 焦点交接抑制:作用域必须覆盖到 simulate_paste 之后(写剪贴板与随后的
+    // 等待仍在 ensure_focus 的重试窗口内),故守卫活到函数返回,由 Drop 统一
+    // 解除。AtTarget 不动焦点,无需抑制
+    let _handoff = match handling {
+        FocusHandling::HideFirst | FocusHandling::KeepOpen => Some(FocusHandoffGuard::new()),
+        FocusHandling::AtTarget => None,
+    };
     match handling {
-        FocusHandling::HideFirst => release_focus_to_target(app_handle).await,
+        FocusHandling::HideFirst => {
+            // 销毁窗口时 ensure_focus 线程会因窗口消失而自然退出,
+            // 显式抑制让销毁前的最后几次 set_focus 也停手
+            release_focus_to_target(app_handle).await;
+        }
         FocusHandling::KeepOpen => {
-            if do_paste && !refocus_target_keep_window(app_handle).await {
-                // 没有任何可用落点(桌面上没有其他可激活窗口等):
-                // 前台仍是本面板,模拟按键会落进自己的搜索框,降级为仅复制
-                do_paste = false;
+            if do_paste {
+                if refocus_target_keep_window(app_handle).await {
+                    // 交接焦点后重申本窗口置顶(幂等,SWP_NOACTIVATE 不抢焦点):
+                    // 目标窗口被激活时可能把面板压到后面,视觉上像"被盖住"
+                    let our_hwnd = app_handle
+                        .get_webview_window("main")
+                        .and_then(|w| w.hwnd().ok())
+                        .map(|h| h.0 as isize)
+                        .unwrap_or(0);
+                    let _ = crate::utils::input_focus::force_topmost(our_hwnd);
+                } else {
+                    // 没有任何可用落点(桌面上没有其他可激活窗口等):前台仍是
+                    // 本面板,模拟按键会落进自己的搜索框。这里不再静默降级为
+                    // 仅复制(release 版无任何输出,用户只看到"点了没反应"),
+                    // 改走销毁窗口的可靠路径 —— 窗口销毁后 Windows 隐式激活目标
+                    // 窗口,内容一定能粘出去;该路径也失败才退回仅复制
+                    eprintln!("[keep-open] no usable target — degrading to HideFirst path");
+                    if !release_focus_to_target(app_handle).await {
+                        eprintln!("[keep-open] HideFirst fallback failed too — copy only");
+                        do_paste = false;
+                    }
+                }
             }
         }
         FocusHandling::AtTarget => {

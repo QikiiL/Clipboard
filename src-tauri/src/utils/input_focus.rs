@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -33,6 +34,34 @@ const SWP_NOSIZE: u32 = 0x0001;
 const SWP_NOMOVE: u32 = 0x0002;
 const SWP_NOACTIVATE: u32 = 0x0010;
 const HWND_TOPMOST: isize = -1;
+
+/// 焦点交接抑制标志:应用正在把前台交给**外部目标窗口**期间为 true。
+///
+/// 背景:窗口创建后 `window_manager::ensure_focus` 会在后台线程里反复
+/// `set_focus`,直到确认拿到前台(最长约 0.75 秒)。用户唤出面板后很快点击
+/// 条目时,这段重试仍在跑 —— 「粘贴后保持打开」刚把前台交给目标窗口,
+/// 重试线程立刻又把焦点抢回本面板,随后模拟的 Ctrl+V 就落进了面板自己的
+/// 搜索框,表现为"点了没粘贴"。交接期间把该标志置 true,重试线程据此立即
+/// 停手(见 ensure_focus)。
+///
+/// 语义:只是"别抢焦点"的抑制信号,不影响任何 Win32 调用本身。
+static FOCUS_HANDOFF: AtomicBool = AtomicBool::new(false);
+
+/// 标记"开始把前台交给外部目标窗口"。必须与 [`end_focus_handoff`] 成对,
+/// 否则重试线程被永久抑制(面板唤出后可能"可见但非前台")。
+pub fn begin_focus_handoff() {
+    FOCUS_HANDOFF.store(true, Ordering::SeqCst);
+}
+
+/// 结束交接:恢复"可以抢回焦点"的常态。幂等。
+pub fn end_focus_handoff() {
+    FOCUS_HANDOFF.store(false, Ordering::SeqCst);
+}
+
+/// 当前是否处于焦点交接中(为 true 时任何"把焦点抢回本面板"的重试都必须停止)
+pub fn is_focus_handoff_active() -> bool {
+    FOCUS_HANDOFF.load(Ordering::SeqCst)
+}
 
 /// 直接把窗口提到置顶层。必须绕过 tao 的 `set_always_on_top`:它走"账面
 /// 标志差量",账面已是 true 时不会再发任何 Win32 调用 —— 而创建竞态可能
@@ -142,5 +171,34 @@ impl PasteMode {
 
     pub fn target(&self) -> isize {
         *self.target.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 断言失败/恐慌时也要复位全局标志,否则会污染同进程内后续测试
+    struct ResetHandoff;
+    impl Drop for ResetHandoff {
+        fn drop(&mut self) {
+            end_focus_handoff();
+        }
+    }
+
+    /// 交接标志的 begin/end 往返:初始未抑制 → begin 后抑制 → end 后恢复。
+    /// FOCUS_HANDOFF 是进程级静态量,本模块只有这一个测试读写它,
+    /// 故不需要额外串行保护;若将来新增读它的测试,须与本测试合并或加锁。
+    #[test]
+    fn focus_handoff_flag_roundtrip() {
+        end_focus_handoff();
+        assert!(!is_focus_handoff_active(), "初始应为未抑制");
+
+        begin_focus_handoff();
+        let _reset = ResetHandoff;
+        assert!(is_focus_handoff_active(), "begin 后应处于抑制态");
+
+        end_focus_handoff();
+        assert!(!is_focus_handoff_active(), "end 后应恢复未抑制");
     }
 }
