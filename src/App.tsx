@@ -176,22 +176,24 @@ function AppContent() {
           <div className="flex items-center gap-1 pr-2.5 @max-narrow:gap-0.5 @max-narrow:pr-1">
             <button
               onClick={handleTogglePin}
-              className={`flex items-center justify-center w-[30px] h-[30px] rounded-lg transition-colors @max-narrow:w-[26px] @max-narrow:h-[26px] ${
+              className={`clip-titlebtn flex items-center justify-center w-[30px] h-[30px] rounded-lg transition-colors @max-narrow:w-[26px] @max-narrow:h-[26px] ${
                 pinned
                   ? 'bg-accent-soft text-accent'
                   : 'text-muted hover:bg-hairline hover:text-faint'
               }`}
+              data-active={pinned}
               title={pinned ? '取消置顶' : '置顶:悬浮于所有应用之上'}
             >
               <PinIcon size={16} />
             </button>
             <button
               onClick={handleToggleKeepOpen}
-              className={`flex items-center justify-center w-[30px] h-[30px] rounded-lg transition-colors @max-narrow:w-[26px] @max-narrow:h-[26px] ${
+              className={`clip-titlebtn flex items-center justify-center w-[30px] h-[30px] rounded-lg transition-colors @max-narrow:w-[26px] @max-narrow:h-[26px] ${
                 keepOpen
                   ? 'bg-accent-soft text-accent'
                   : 'text-muted hover:bg-hairline hover:text-faint'
               }`}
+              data-active={keepOpen}
               title={
                 keepOpen
                   ? '取消保持打开'
@@ -202,11 +204,12 @@ function AppContent() {
             </button>
             <button
               onClick={() => useContinuousPasteStore.getState().toggleMode()}
-              className={`flex items-center justify-center w-[30px] h-[30px] rounded-lg transition-colors @max-narrow:w-[26px] @max-narrow:h-[26px] ${
+              className={`clip-titlebtn flex items-center justify-center w-[30px] h-[30px] rounded-lg transition-colors @max-narrow:w-[26px] @max-narrow:h-[26px] ${
                 cpMode
                   ? 'bg-accent-soft text-accent'
                   : 'text-muted hover:bg-hairline hover:text-faint'
               }`}
+              data-active={cpMode}
               title={
                 cpMode
                   ? '退出连续粘贴模式'

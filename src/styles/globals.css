@@ -381,6 +381,16 @@ html[data-style="mist"] .clip-panel { box-shadow: var(--lift); }
 /* 标题栏:去掉下边线(方案 §3.3 行 180;preview C 段不写 titlebar 规则 = 无下边线) */
 html[data-style="mist"] .clip-titlebar { border-bottom-width: 0; }
 
+/* 顶部开关按钮的开启态:原 bg-accent-soft 与 --bg 仅差约 2% 亮度(1.07:1),几乎看不见;
+   纯 --sel-paste 在整窗里又偏重 → 与 --surface 二八混合,提亮约 2.5 个 L 点
+   (浅色 86% → 88.4%,深色 38% → 35.3%),仍明显深于原 accent-soft 的 93.5%。
+   图标用 --accent-deep(浅 53% / 深 82%),比原 accent-soft 档深一档;
+   悬停不再单独加深(同一条规则即压住工具类的 hover:bg-hairline),避免"又跳回深绿"。 */
+html[data-style="mist"] .clip-titlebtn[data-active="true"] {
+  background: color-mix(in oklab, var(--sel-paste) 80%, var(--surface));
+  color: var(--accent-deep);
+}
+
 /* 搜索行 / 搜索框:左右 12px、28px 高、胶囊、--surface 底 + 柔和投影;
    focus 换成 2px accent-soft 环(preview 行 154–156)。原 focus-within:ring-[3px]
    是 box-shadow 合成的 ring → 整条覆写 box-shadow 即可清掉。 */
@@ -405,12 +415,22 @@ html[data-style="mist"].dark .clip-searchbox:focus-within {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-/* 页签:低对比 pill —— 容器无底无框、gap 6px、padding 2px 12px 8px;
+/* 页签行(外层 wrapper,GroupTabs 上的 hook 类):原工具类是 pt-1 pb-3(上 4 / 下 12),
+   配合 .clip-tabs 的下内边距会让"搜索框→页签"只有 6px、"页签→首行"却有 24px。
+   这里把上下留白调匀:本层承担 10/6,页签容器承担 2/2,列表 pt 4 →
+   标准档 上 12 / 下 12,窄档 上 12 / 下 10。左右沿用工具类(px-4 / @max-narrow:px-2.5 / @min-wide:px-5)。 */
+html[data-style="mist"] .clip-tabsrow {
+  padding-top: 10px;
+  padding-bottom: 6px;
+}
+
+/* 页签:低对比 pill —— 容器无底无框、gap 6px、padding 2px 12px 2px;
    页签 pill 化、选中 --sel 底 + text-ink + 600 字重(preview 行 157–159 / 方案 §3.3 行 178)。
-   只选 [data-selected](React 恒渲染该属性,值为 "true"/"false")。 */
+   只选 [data-selected](React 恒渲染该属性,值为 "true"/"false")。
+   垂直内边距由 8px 收到 2px(上下各 2),与 .clip-tabsrow 的 10/6 合成 12/12。 */
 html[data-style="mist"] .clip-tabs {
   gap: 6px;
-  padding: 2px 12px 8px;
+  padding: 2px 12px 2px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -524,7 +544,7 @@ html[data-style="mist"] .clip-continuous-bar { border-radius: var(--radius); }
    避免将来层叠顺序变动时静默变矮)。 */
 @container (max-width: 22.5rem) {
   html[data-style="mist"] .clip-list { padding: 2px 6px; }
-  html[data-style="mist"] .clip-tabs { padding: 2px 6px 6px; }
+  html[data-style="mist"] .clip-tabs { padding: 2px 6px 2px; }
   html[data-style="mist"] .clip-searchrow { padding: 0 6px; }
   html[data-style="mist"] .clip-statusbar { padding: 0 6px; }
   html[data-style="mist"] .clip-row { min-height: 60px; }

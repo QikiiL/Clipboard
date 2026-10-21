@@ -61,7 +61,7 @@ export function GroupTabs() {
 
   return (
     <>
-      <div className="px-4 pt-1 pb-3 @max-narrow:px-2.5 @max-narrow:pb-2 @min-wide:px-5 @min-wide:pb-3.5">
+      <div className="clip-tabsrow px-4 pt-1 pb-3 @max-narrow:px-2.5 @max-narrow:pb-2 @min-wide:px-5 @min-wide:pb-3.5">
       <div className="clip-tabs tabs-scroll flex items-center gap-[3px] p-[3px] rounded-full bg-surface border border-hairline overflow-x-auto">
         <button
           onClick={handleShowAll}
