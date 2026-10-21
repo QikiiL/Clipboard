@@ -1,6 +1,6 @@
 {
-  "version": "1.4.0",
-  "notes": "新增：三套可切换界面风格——浮笺（默认）、瑞士索引、雾绿工作台。每套均含浅色与深色两态，在「设置 → 外观 → 界面风格」中即选即生效，重启后保留。浮笺为默认风格，界面与升级前完全一致。",
+  "version": "1.4.1",
+  "notes": "修复：「粘贴后保持打开」时单击条目不粘贴、面板被其他窗口压到后面或置顶失效；面板重建后短暂失去置顶；其余为内部稳定性改动。",
   "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.4.0",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
