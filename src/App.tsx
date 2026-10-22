@@ -170,7 +170,7 @@ function AppContent() {
         className="clip-titlebar flex items-center justify-between h-[46px] pl-5 pr-1.5 border-b border-hairline select-none @max-narrow:h-[40px] @max-narrow:pl-3 @max-narrow:pr-1 @min-wide:h-[52px] @min-wide:pl-6"
       >
         <h1 data-tauri-drag-region className="text-[13px] font-semibold tracking-wide cursor-default @max-narrow:text-[12px] @min-wide:text-[14px]">
-          剪贴板
+          剪雀
         </h1>
         <div className="flex items-center">
           <div className="flex items-center gap-1 pr-2.5 @max-narrow:gap-0.5 @max-narrow:pr-1">

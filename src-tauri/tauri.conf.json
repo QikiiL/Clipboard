@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "clipboard",
-  "version": "1.4.3",
+  "productName": "Sparrow",
+  "version": "2.0.0",
   "identifier": "com.lyz.clipboard-manager-tauri",
-  "mainBinaryName": "clipboard-manager-tauri",
+  "mainBinaryName": "sparrow",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

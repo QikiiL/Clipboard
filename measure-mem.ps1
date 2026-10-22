@@ -1,5 +1,5 @@
-# Measures the clipboard-manager process tree memory (working set + private)
-$apps = Get-Process clipboard-manager-tauri -ErrorAction SilentlyContinue
+# Measures the sparrow (剪雀) process tree memory (working set + private)
+$apps = Get-Process sparrow -ErrorAction SilentlyContinue
 if (-not $apps) { Write-Output 'app not running'; exit 1 }
 $total = 0; $priv = 0
 $apps | ForEach-Object {

@@ -4,6 +4,24 @@ use tauri::{
     Emitter, Manager,
 };
 
+/// 托盘图标:用专用的 tray-icon.png(小尺寸、透明圆角),而不是把窗口大图标
+/// 缩到 16/32px(缩下去发糊、边缘有白底)。解码失败(资源异常)回落窗口默认
+/// 图标,再兜底 1x1 透明图 —— 托盘没图标用户就找不到入口了。
+fn tray_icon(app: &tauri::App) -> tauri::image::Image<'static> {
+    const TRAY_ICON_PNG: &[u8] = include_bytes!("../../icons/tray-icon.png");
+    if let Ok(image) = tauri::image::Image::from_bytes(TRAY_ICON_PNG) {
+        return image;
+    }
+    eprintln!("Failed to decode tray-icon.png, falling back to window icon");
+    // default_window_icon 借用自 app,拷成 owned 才能返回 'static
+    match app.default_window_icon() {
+        Some(icon) => {
+            tauri::image::Image::new_owned(icon.rgba().to_vec(), icon.width(), icon.height())
+        }
+        None => tauri::image::Image::new_owned(vec![0, 0, 0, 0], 1, 1),
+    }
+}
+
 pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
     let pause_item = MenuItem::with_id(app, "pause", "暂停监听", true, None::<&str>)?;
@@ -13,13 +31,9 @@ pub fn create_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let menu = Menu::with_items(app, &[&show_item, &pause_item, &minimize_item, &quit_item])?;
 
     let _tray = TrayIconBuilder::new()
-        .icon(
-            app.default_window_icon()
-                .cloned()
-                .unwrap_or_else(|| tauri::image::Image::new_owned(vec![0, 0, 0, 0], 1, 1)),
-        )
+        .icon(tray_icon(app))
         .menu(&menu)
-        .tooltip("剪贴板管理器")
+        .tooltip("剪雀 Sparrow")
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "show" => {
                 crate::commands::window::clear_paste_target(app);

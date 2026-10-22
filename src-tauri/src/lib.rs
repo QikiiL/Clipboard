@@ -310,17 +310,11 @@ pub fn run() {
                 startup_shortcut,
             ))));
 
-            // 自启动自愈:设置开启但任务计划丢失(如旧版用注册表 Run 键、或任务被
-            // 安全软件清理)时重建,保证"开机自启动"开关真实生效
-            if saved_settings.start_with_windows {
-                if let Ok(exe) = std::env::current_exe() {
-                    if let Err(e) =
-                        services::settings_service::enable_autostart(&exe.to_string_lossy())
-                    {
-                        eprintln!("Autostart self-heal failed: {}", e);
-                    }
-                }
-            }
+            // 自启动任务:先清掉 1.x 的旧任务名(ClipboardManagerAutostart),
+            // 再按当前设置重建/收敛新任务(SparrowAutostart)。改名后若不清旧任务,
+            // 老用户开机时会被新旧两个任务各拉起一次。
+            // 这一步同时取代了原先的"任务计划丢失时自愈"(设置开启即重建)。
+            services::settings_service::migrate_autostart_task(app.handle());
 
             // 启动定时清理任务（每小时）
             let app_handle_cleanup = app.handle().clone();

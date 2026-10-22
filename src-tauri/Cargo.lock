@@ -723,36 +723,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clipboard-manager-tauri"
-version = "1.4.3"
-dependencies = [
- "arboard",
- "base64 0.22.1",
- "clipboard-win",
- "enigo",
- "image",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-sql",
- "tauri-plugin-store",
- "tokio",
- "ureq",
- "webview2-com",
- "windows 0.61.3",
- "windows-core 0.61.2",
- "winreg 0.52.0",
-]
-
-[[package]]
 name = "clipboard-win"
 version = "5.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4557,6 +4527,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "sparrow"
+version = "2.0.0"
+dependencies = [
+ "arboard",
+ "base64 0.22.1",
+ "clipboard-win",
+ "enigo",
+ "image",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-sql",
+ "tauri-plugin-store",
+ "tokio",
+ "ureq",
+ "webview2-com",
+ "windows 0.61.3",
+ "windows-core 0.61.2",
+ "winreg 0.52.0",
+]
+
+[[package]]
 name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4974,6 +4974,7 @@ dependencies = [
  "heck 0.5.0",
  "http",
  "http-range",
+ "image",
  "jni",
  "libc",
  "log",

@@ -738,7 +738,7 @@ export function SettingsPanel({ isOpen, onClose }: Props) {
                     )}
                     {smsStatus.access === 'unsupported' && '此系统版本不支持读取通知，功能不可用'}
                     {(smsStatus.access === 'denied' || smsStatus.access === 'unspecified') && (
-                      <>还没获得读取通知的权限。点右侧按钮打开系统设置，在「允许应用访问通知」里勾选本应用（clipboard-manager-tauri）</>
+                      <>还没获得读取通知的权限。点右侧按钮打开系统设置，在「允许应用访问通知」里勾选本应用（剪雀 Sparrow）</>
                     )}
                   </p>
                   {(smsStatus.access === 'denied' || smsStatus.access === 'unspecified') && (

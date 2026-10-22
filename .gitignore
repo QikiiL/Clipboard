@@ -43,3 +43,14 @@ release-artifacts/
 # Temporary API files
 .release-body.json
 .patch-resp.json
+
+# Local dev runtime data
+/config/
+/data/
+
+# Local brand/source previews (not shipped)
+/图标logo.png
+/图叙作品.jpg
+/docs/icon-preview.png
+/docs/icon-crop-preview.png
+/docs/tray-size-preview.png

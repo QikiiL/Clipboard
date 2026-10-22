@@ -1,7 +1,7 @@
 {
-  "version": "1.4.3",
-  "notes": "新增：富文本视图可直接编辑（支持加粗 / 斜体 / 下划线、列表、链接与粘贴），保存后同步更新富文本格式。\n优化：富文本预览统一排版与主题配色，压掉来源页面的背景、布局与滚动噪音；载入中保存保护。",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.4.3",
+  "version": "2.0.0",
+  "notes": "2.0.0 正式更名为「剪雀 Sparrow」（原名 Clipboard / 剪贴板管理器）：应用名、窗口标题、托盘提示、安装包与可执行文件（sparrow.exe）全部更新，功能与数据格式保持不变。\n升级方式：直接覆盖安装即可。安装器会读取旧版卸载项记录的安装位置（例如 D:\\clipboard），检测到 1.x 就在原目录原地升级，不会另装一份；旧 config、data、历史记录与设置全部保留。\n升级后自动清理旧版卸载项、旧快捷方式与旧的自启动任务，避免新旧两个版本同时开机启动。旧目录里确认无误的残留数据可自行删除。",
+  "github": "https://github.com/QikiiL/Sparrow/releases/tag/v2.0.0",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }

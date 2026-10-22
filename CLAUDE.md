@@ -4,9 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A system clipboard manager built with Tauri 2 + React 19 + TypeScript + Vite. UI is in Chinese. Migrated from a C# WPF version. **Windows-only** (uses clipboard-win/winreg; file capture/paste via CF_HDROP).
+**Sparrow / 剪雀** — a system clipboard manager built with Tauri 2 + React 19 + TypeScript + Vite. UI is in Chinese. Migrated from a C# WPF version. **Windows-only** (uses clipboard-win/winreg; file capture/paste via CF_HDROP). Current version **2.0.0**; main binary `sparrow.exe`, installer `sparrow-setup.exe`. The product was called **Clipboard 1.x** before the 2.0.0 rename (repo dir still `clipboard-manager-tauri`).
 
-**Portable layout (XDG-style), everything next to the exe** (`lib.rs::exe_dir`): `config/` holds settings.json + storage pointer + window-state.json (via `app_config_dir()`), `data/` holds clipboard.db + images/ (via `app_data_dir_default()`); first launch migrates them from the legacy `%APPDATA%/com.lyz.clipboard-manager-tauri` dir (`migrate_legacy_layout`). Uninstalling the NSIS package deletes install-dir data.
+**Portable layout (XDG-style), everything next to the exe** (`lib.rs::exe_dir`): `config/` holds settings.json + storage pointer + window-state.json (via `app_config_dir()`), `data/` holds clipboard.db + images/ (via `app_data_dir_default()`). Installer default install dir is `%LOCALAPPDATA%\Sparrow`, but **1.x installs are upgraded in place**: `installer.nsi::DetectLegacyInstallDir` reads the 1.x uninstall entry (`…\Uninstall\clipboard`) `InstallLocation` (SHCTX → HKCU → HKLM fallback, outer quotes stripped, dir must contain `clipboard-manager-tauri.exe` or `uninstall.exe`) and reuses that path — 1.x let the user pick any dir, e.g. `D:\clipboard`. Detection also forces passive mode (directory/reinstall pages skipped, app auto-launched). Only when the user picks a *different* dir does the installer copy the old `config/` + `data/` over (never overwriting), and `CLEANUP_LEGACY_INSTALL` afterwards deletes the 1.x uninstall key, `Software\lyz\clipboard`, the `clipboard*.lnk` shortcuts and `$INSTDIR\clipboard-manager-tauri.exe`. First launch still migrates from the legacy `%APPDATA%/com.lyz.clipboard-manager-tauri` dir (`migrate_legacy_layout`). Uninstalling does **not** delete user data: `NSIS_HOOK_PREUNINSTALL` moves `config/` and `data/` to the sibling `sparrow-userdata` dir (outside `$INSTDIR`, so the uninstaller's `RMDir /r` cannot take it along) and leaves them for the user to keep or delete.
+
+### Naming & compatibility (2.0.0 rename)
+
+Kept **unchanged on purpose** — changing any of these breaks existing installs or the SMS-capture chain:
+
+| Item | Value | Why it stays |
+| --- | --- | --- |
+| `identifier` | `com.lyz.clipboard-manager-tauri` | Asset-protocol scope, `%APPDATA%` legacy dir name, `migrate_legacy_layout` source |
+| MSIX package `Name` / `Publisher` | `ClipboardManagerIdentity` / `CN=ClipboardManager` | PFN hash `z0fnhbkv2vcxr` is derived from them |
+| `APP_AUMID` / `HELPER_AUMID` | `ClipboardManagerIdentity_z0fnhbkv2vcxr!ClipboardManagerApp` / `…!SmsHelper` | Shell activation of the sparse package |
+| Legacy migration paths | `%APPDATA%\com.lyz.clipboard-manager-tauri`, `%LOCALAPPDATA%\clipboard`, registry `…\Uninstall\clipboard\InstallLocation` | Old users' settings / data (1.x install dir is whatever the registry says, e.g. `D:\clipboard`) |
+| GitHub repo | `QikiiL/Sparrow`（原 `QikiiL/Clipboard`，2.0.0 改名） | `update.rs` raw + jsdelivr URLs、`version.json`、README 均已指向新名；旧地址由 GitHub 重定向，仅作 1.x 更新兼容入口 |
+
+Renamed in 2.0.0: `productName` → `Sparrow` (NSIS output `Sparrow_<ver>_x64-setup.exe`, install dir, shortcut names, uninstall `DisplayName`), `mainBinaryName` / Cargo package / npm name → `sparrow`, MSIX `DisplayName` → `剪雀` / `剪雀短信助手` (`Description`: `Sparrow 剪贴板管理器` / `Sparrow SMS helper`; a manifest edit means rebuilding the `.msix` with `build-identity.ps1` **and re-signing**; PFN itself is unaffected), autostart scheduled task → `SparrowAutostart`, uninstall backup dir → `sparrow-userdata`, NSIS hooks `taskkill` target → `sparrow.exe`.
+
+> All of the above is already implemented. `settings_service.rs` uses `SparrowAutostart` and deletes the 1.x task `ClipboardManagerAutostart` (`LEGACY_AUTOSTART_TASK`) at startup; `nsis-hooks.nsh` sets `USERDATA_BACKUP = sparrow-userdata` and `KILL_RUNNING_APP` best-effort kills the 1.x image `clipboard-manager-tauri.exe` first, then `sparrow.exe`, then `sms-helper.exe`. The 1.x → 2.0.0 takeover prefers the registry-detected `$LegacyInstallDir` over the `LEGACY_INSTDIR = %LOCALAPPDATA%\clipboard` fallback, skips copying entirely on an in-place upgrade (`$INSTDIR == $LegacyInstallDir`), only copies `config`/`data` when the new dir is still empty, never runs the old uninstaller, and `CLEANUP_LEGACY_INSTALL` removes the 1.x uninstall key / `Software\lyz\clipboard` / old shortcuts / old exe (exact names only, best-effort).
 
 ## Build Commands
 
@@ -81,7 +97,7 @@ Note: the default toolchain is MSVC (`stable-x86_64-pc-windows-msvc`), and `cl.e
 - **Global hotkey**: Ctrl+Shift+V (configurable); optional Win+V integration (requires admin, HKLM registry)
 - **Clipboard polling**: 500ms interval
 - **Cleanup task**: Hourly, deletes expired items (retention_days) and excess (max_item_count), skips favorites, removes orphaned image files
-- **Autostart**: passes `--minimized` (app starts hidden in tray)
+- **Autostart**: Windows Task Scheduler task `SparrowAutostart` (`schtasks`, `/RL HIGHEST`) with `--minimized` (app starts hidden in tray). Not the HKCU Run key — an elevated app (`requireAdministrator`) is silently skipped at logon; `lib.rs` self-heals the task if it disappears. 1.x used the task name `ClipboardManagerAutostart`.
 - **Settings**: JSON file via tauri-plugin-store (not SQLite); newly added fields use `#[serde(default)]` for backward compat
 - **Dark mode**: Tailwind `class` strategy, persisted in localStorage
 
@@ -97,7 +113,7 @@ Note: the default toolchain is MSVC (`stable-x86_64-pc-windows-msvc`), and `cl.e
 - Frontend `db.ts` calls `invoke('get_db_path')` to get the absolute path — don't hardcode `sqlite:clipboard.db`
 - ALL db/images paths must resolve through `storage_service::current_data_dir`/`images_dir` — never hardcode `app_config_dir`/`app_data_dir`; the user may have moved data to a custom dir. Migration only happens at cold start (no open SQLite connections); never copy `clipboard.db` while the app is running. The resolved images dir must also be granted at startup via `asset_protocol_scope().allow_directory()` — frontend thumbnails load through the asset protocol (`convertFileSrc`), whose config scope only covers the default `$APPDATA/images/*`
 - `std::fs::canonicalize` on Windows returns `\\?\`-prefixed extended paths — NEVER persist them (storage.json, DB columns) or build `sqlite:` URLs from them (`sqlite://?/D:/...` crashes the backend pool at startup). Use `storage_service::strip_extended_prefix`; the backend pool must connect via `SqliteConnectOptions::filename(path)`, not a URL string
-- `build.rs` links `app.manifest` (`requestedExecutionLevel=requireAdministrator`) only into the main bin (`rustc-link-arg-bin`, with `new_without_app_manifest()` suppressing the default manifest), so the test bins inherit the elevation requirement and fail to launch without an elevated shell (`cargo test` -> bin target: os error 740, "the requested operation requires elevation"). `cargo test --lib` is unaffected and runs directly (86 passed / 4 ignored)
+- `build.rs` links `app.manifest` (`requestedExecutionLevel=requireAdministrator`) only into the main bin (`rustc-link-arg-bin`, with `new_without_app_manifest()` suppressing the default manifest), so the test bins inherit the elevation requirement and fail to launch without an elevated shell (`cargo test` -> bin target: os error 740, "the requested operation requires elevation"). `cargo test --lib` is unaffected and runs directly (90 passed / 4 ignored)
 
 ## Development Workflow
 

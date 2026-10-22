@@ -1,6 +1,6 @@
 [package]
-name = "clipboard-manager-tauri"
-version = "1.4.3"
+name = "sparrow"
+version = "2.0.0"
 description = "A clipboard manager built with Tauri"
 authors = ["you"]
 license = "MIT"
@@ -19,7 +19,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "protocol-asset"] }
+# image-png:托盘专用图标以 include_bytes! 打包 PNG,需要 tauri 的
+# Image::from_bytes 解码能力(image 0.25 本就是本包直接依赖,不新增依赖)
+tauri = { version = "2", features = ["tray-icon", "protocol-asset", "image-png"] }
 tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"

@@ -19,7 +19,7 @@ fn main() {
     embed_main_manifest();
 }
 
-/// 把 app.manifest 编译成 .res 并链接到主程序二进制 clipboard-manager-tauri。
+/// 把 app.manifest 编译成 .res 并链接到主程序二进制 sparrow。
 /// 用 .res 链接可覆盖 rustc 默认清单(不会与探针的默认清单冲突),且清单只进
 /// 主程序,不进 lib,因此同包的 identity_probe 探针不受影响。
 fn embed_main_manifest() {
@@ -50,7 +50,7 @@ fn embed_main_manifest() {
 
     // 仅作用于主程序二进制,不影响同包探针
     println!(
-        "cargo:rustc-link-arg-bin=clipboard-manager-tauri={}",
+        "cargo:rustc-link-arg-bin=sparrow={}",
         res_path.display()
     );
 }

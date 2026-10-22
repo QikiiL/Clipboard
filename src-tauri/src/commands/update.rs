@@ -2,10 +2,10 @@ use serde::Serialize;
 use tauri::{Emitter, Manager};
 
 /// 版本信息文件主地址(GitHub raw)
-const VERSION_JSON_URL: &str = "https://raw.githubusercontent.com/QikiiL/Clipboard/master/version.json";
+const VERSION_JSON_URL: &str = "https://raw.githubusercontent.com/QikiiL/Sparrow/master/version.json";
 /// 兜底镜像:jsdelivr 国内可达性较好;有约 12 小时缓存,最坏比 raw 晚半天看到新版本
 const VERSION_JSON_FALLBACK_URL: &str =
-    "https://cdn.jsdelivr.net/gh/QikiiL/Clipboard@master/version.json";
+    "https://cdn.jsdelivr.net/gh/QikiiL/Sparrow@master/version.json";
 
 /// 读取 Windows 系统代理(Clash/V2Ray 等工具写入的 WinINET 设置)。
 /// ureq 默认只认 HTTP_PROXY 环境变量、不读系统代理,而国内直连
@@ -190,7 +190,7 @@ pub fn spawn_update_watcher(app: tauri::AppHandle) {
                 let _ = app
                     .notification()
                     .builder()
-                    .title("剪贴板管理器有新版本")
+                    .title("剪雀有新版本")
                     .body(format!(
                         "v{} 已发布,唤出面板即可查看更新内容并下载",
                         info.latest

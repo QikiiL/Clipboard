@@ -531,9 +531,24 @@ Function .onInit
   ; UAC),重装选择页、旧卸载器确认页全部跳过,卸载+安装+重启应用全自动。
   ; 语言对话框因注册表已记住上次选择同样不会弹出。全新安装不受影响,
   ; 仍走交互向导。
+  ; /D 显式指定目录时上面不会调用 RestorePreviousInstallLocation,但后面接管
+  ; 旧数据仍要知道旧目录在哪 → 补一次检测(幂等,查不到就是空串)
+  ${If} $LegacyInstallDir == ""
+    Call DetectLegacyInstallDir
+  ${EndIf}
+
   ${If} $PassiveMode = 0
     ReadRegStr $R0 SHCTX "${UNINSTKEY}" "UninstallString"
     ${If} $R0 != ""
+      StrCpy $PassiveMode 1
+      StrCpy $AutoRunApp 1
+    ${EndIf}
+  ${EndIf}
+  ; 1.x 原地升级:新键(Sparrow)必然不存在,但旧卸载项在 → 同样走被动模式。
+  ; $INSTDIR 已在上面被设成旧 InstallLocation,目录页被 SkipIfPassive 跳过,
+  ; 安装路径保持旧路径,旧 config/data 原地保留。
+  ${If} $PassiveMode = 0
+    ${If} $LegacyInstallDir != ""
       StrCpy $PassiveMode 1
       StrCpy $AutoRunApp 1
     ${EndIf}
@@ -923,10 +938,66 @@ Section Uninstall
   ${EndIf}
 SectionEnd
 
+; 读取上次安装位置。优先新键(Sparrow);新键为空时尝试 1.x 旧卸载项的
+; InstallLocation —— 1.x 的安装目录由用户在向导里选,可能是 D:\clipboard
+; 这类自定义路径,只有沿用旧路径才算原地升级,否则会被当成新软件另装一份。
 Function RestorePreviousInstallLocation
   ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
-  StrCmp $4 "" +2 0
+  ${If} $4 == ""
+    Call DetectLegacyInstallDir
+    StrCpy $4 $LegacyInstallDir
+  ${EndIf}
+  ${If} $4 != ""
     StrCpy $INSTDIR $4
+  ${EndIf}
+FunctionEnd
+
+; 检测 1.x(Clipboard / clipboard-manager-tauri)的安装目录。
+; 依次读 SHCTX → HKCU → HKLM 的旧卸载项 InstallLocation(currentUser 安装器
+; 里 SHCTX 就是 HKCU,HKCU/HKLM 只是兜底),去掉外层引号,并校验该目录里
+; 确实有旧主程序或卸载器(防止脏注册表把安装路径带偏)。
+; 命中时写入 $LegacyInstallDir;未命中保持空串(后续数据接管会退回默认目录)。
+Function DetectLegacyInstallDir
+  StrCpy $LegacyInstallDir ""
+  StrCpy $0 ""
+  ReadRegStr $0 SHCTX "${LEGACY_UNINSTKEY}" "InstallLocation"
+  ${If} $0 == ""
+    ReadRegStr $0 HKCU "${LEGACY_UNINSTKEY}" "InstallLocation"
+  ${EndIf}
+  ${If} $0 == ""
+    ReadRegStr $0 HKLM "${LEGACY_UNINSTKEY}" "InstallLocation"
+  ${EndIf}
+  ${If} $0 == ""
+    Return
+  ${EndIf}
+
+  ; 卸载器写入的值带外层引号(形如 'D:\clipboard' 外加双引号),这里去掉
+  ; NSIS 的 StrCpy 负长度是"去掉末尾 N 个字符",去掉开头要用偏移量:
+  ; StrCpy $0 $0 "" 1 = 从第 2 个字符复制到结尾
+  StrCpy $1 $0 1
+  ${If} $1 == '"'
+    StrCpy $0 $0 "" 1
+  ${EndIf}
+  StrLen $2 $0
+  ${If} $2 > 0
+    IntOp $2 $2 - 1
+    StrCpy $1 $0 1 $2
+    ${If} $1 == '"'
+      StrCpy $0 $0 -1
+    ${EndIf}
+  ${EndIf}
+  ${If} $0 == ""
+    Return
+  ${EndIf}
+
+  ; 目录里必须有旧主程序或旧卸载器,才认这个路径
+  IfFileExists "$0\clipboard-manager-tauri.exe" 0 legacy_dir_check_uninstaller
+    StrCpy $LegacyInstallDir $0
+    Return
+  legacy_dir_check_uninstaller:
+  IfFileExists "$0\uninstall.exe" 0 legacy_dir_check_done
+    StrCpy $LegacyInstallDir $0
+  legacy_dir_check_done:
 FunctionEnd
 
 Function Skip

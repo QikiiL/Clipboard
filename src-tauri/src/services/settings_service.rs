@@ -8,7 +8,11 @@ const STORE_KEY: &str = "app_settings";
 /// 开机自启动的任务计划名。提权应用(requireAdministrator manifest)
 /// 无法用注册表 Run 键自启动——登录时 Windows 不自动弹 UAC,会静默跳过;
 /// 任务计划程序的"最高权限运行"是标准做法,登录即启动且无需 UAC
-const AUTOSTART_TASK: &str = "ClipboardManagerAutostart";
+const AUTOSTART_TASK: &str = "SparrowAutostart";
+
+/// 改名(2.0.0)前的旧任务名:1.x 的"剪贴板管理器"用它注册。升级后必须清掉,
+/// 否则新旧两个任务会在登录时同时拉起两个进程。
+const LEGACY_AUTOSTART_TASK: &str = "ClipboardManagerAutostart";
 
 fn run_schtasks(args: &[&str]) -> Result<std::process::Output, String> {
     use std::os::windows::process::CommandExt;
@@ -48,6 +52,38 @@ pub fn disable_autostart() -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// 品牌改名迁移:把 1.x 的旧自启动任务换成新任务名,并让新任务与当前设置一致。
+///
+/// 无条件 best-effort 删除旧任务(不存在/删除失败都只记日志,绝不阻断启动);
+/// 随后按当前设置收敛新任务:
+/// - start_with_windows = true  → 用当前 exe 重建新任务(enable_autostart 幂等)
+/// - start_with_windows = false → 确保新任务不存在(disable_autostart 幂等)
+///
+/// 在 setup 里调用一次:老用户升级后不会新旧两个任务同时开机拉起,
+/// 同时保留原先"任务被安全软件清理后自愈"的语义。
+pub fn migrate_autostart_task(app_handle: &tauri::AppHandle) {
+    match run_schtasks(&["/Delete", "/TN", LEGACY_AUTOSTART_TASK, "/F"]) {
+        Ok(output) if output.status.success() => {
+            eprintln!("Removed legacy autostart task: {}", LEGACY_AUTOSTART_TASK);
+        }
+        // 旧任务本就不存在:schtasks 返回非 0,属正常情况
+        Ok(_) => {}
+        Err(e) => eprintln!("Failed to remove legacy autostart task: {}", e),
+    }
+
+    let settings = load_settings(app_handle);
+    let result = if settings.start_with_windows {
+        std::env::current_exe()
+            .map_err(|e| e.to_string())
+            .and_then(|p| enable_autostart(&p.to_string_lossy()))
+    } else {
+        disable_autostart()
+    };
+    if let Err(e) = result {
+        eprintln!("Autostart migration failed: {}", e);
+    }
 }
 
 /// settings.json 固定放在程序目录的 config/ 下(绝对路径传入,

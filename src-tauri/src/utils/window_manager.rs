@@ -164,7 +164,7 @@ pub fn create_main_window(app: &AppHandle, show_when_ready: bool) -> tauri::Resu
     let state = load_window_state();
 
     let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-        .title("剪贴板管理器 (Clipboard)")
+        .title("剪雀 (Sparrow)")
         // 初始尺寸仅作占位(基准 420×520 逻辑):随后 apply_initial_geometry 会按
         // 目标显示器与缩放重算(老用户跨 DPI 还原,新用户按屏幕相对 1080p 缩放)
         .inner_size(420.0, 520.0)
