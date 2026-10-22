@@ -1,7 +1,7 @@
 {
-  "version": "1.4.2",
-  "notes": "优化：雾绿工作台风格下，搜索框与分组页签的上下间距更均衡、列表首屏更紧凑；顶部开关按钮（置顶 / 保持打开 / 连续粘贴）的开启态更清晰。其余为内部稳定性改动。",
-  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.4.2",
+  "version": "1.4.3",
+  "notes": "新增：富文本视图可直接编辑（支持加粗 / 斜体 / 下划线、列表、链接与粘贴），保存后同步更新富文本格式。\n优化：富文本预览统一排版与主题配色，压掉来源页面的背景、布局与滚动噪音；载入中保存保护。",
+  "github": "https://github.com/QikiiL/Clipboard/releases/tag/v1.4.3",
   "lanzou": "https://wwbwp.lanzoul.com/b00ybd8mej",
   "lanzou_password": "bdlx"
 }
