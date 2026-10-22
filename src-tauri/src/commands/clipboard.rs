@@ -243,6 +243,139 @@ pub async fn update_item_content(
     Ok(())
 }
 
+/// 把一段 HTML 片段包装成标准 CF_HTML 字节块。
+///
+/// 采集端是"原样保存"源应用给的 CF_HTML(不做解析不重构,保证无损往返);
+/// 编辑后的片段没有现成外壳,必须由我们自己拼一份自洽的:
+/// `<html><body><!--StartFragment-->…<!--EndFragment--></body></html>`。
+/// 头部所有偏移量都是**字节**偏移(相对整块数据起始),不是字符偏移 ——
+/// 含中文/emoji 时两者差得很远,按字符算会把片段切成半个 UTF-8 序列。
+pub(crate) fn build_cf_html(fragment: &str) -> Vec<u8> {
+    const MARK_START: &str = "<!--StartFragment-->";
+    const MARK_END: &str = "<!--EndFragment-->";
+    let body = format!(
+        "<html><body>{}{}{}</body></html>",
+        MARK_START, fragment, MARK_END
+    );
+
+    // 占位串长度必须与 format! 出的头部一致(偏移量固定 10 位),否则整体偏移错位
+    let header_len = "Version:0.9\r\nStartHTML:0000000000\r\nEndHTML:0000000000\r\nStartFragment:0000000000\r\nEndFragment:0000000000\r\n".len();
+    let start_html = header_len;
+    let end_html = header_len + body.len();
+    let start_fragment = start_html + body.find(MARK_START).map_or(0, |i| i + MARK_START.len());
+    let end_fragment = start_html + body.find(MARK_END).unwrap_or(body.len());
+
+    let header = format!(
+        "Version:0.9\r\nStartHTML:{:010}\r\nEndHTML:{:010}\r\nStartFragment:{:010}\r\nEndFragment:{:010}\r\n",
+        start_html, end_html, start_fragment, end_fragment
+    );
+
+    let mut out = header.into_bytes();
+    out.extend_from_slice(body.as_bytes());
+    out
+}
+
+/// 富文本所见即所得编辑后的保存:用前端清理过的 HTML **片段**
+/// (body.innerHTML,不含 `<html>/<body>` 外壳)重写该条目的富格式,
+/// 同时同步纯文本(content / preview / content_hash)。
+///
+/// 片段必须再过一道 `sanitize_clipboard_html`:前端清理只是第一层,
+/// 后端不能信任 IPC 来的内容(与 get_rich_preview 出口净化同一套规则)。
+///
+/// 与 `update_item_content` 的区别:这里**保留** html_path(指向新文件)、
+/// 只把 rtf_path 置 NULL。`paste_service::choose_text_write_path` 只要
+/// html/rtf 任一存在就走 Rich 多格式写回,所以 HTML-only 也能正常投递
+/// 文本 + HTML;旧 RTF 与新内容已不匹配,留着会投出错配格式。
+#[tauri::command]
+pub async fn update_item_rich_content(
+    app_handle: tauri::AppHandle,
+    id: i64,
+    content: String,
+    html: String,
+) -> Result<(), String> {
+    // 空内容(纯空白/只剩被删掉的危险标签)由前端改走 update_item_content,
+    // 正常不会命中;命中时明确报错,不写入空格式
+    let Some(fragment) = sanitize_clipboard_html(&html) else {
+        return Err("富文本内容为空".to_string());
+    };
+
+    let bytes = build_cf_html(&fragment);
+
+    // 文件名带毫秒时间戳:每次编辑都是新文件,不复用旧名(否则旧路径
+    // 被覆盖后,DB 里另一条引用同一文件的条目会跟着变内容)
+    let formats_dir = crate::services::storage_service::formats_dir(&app_handle);
+    std::fs::create_dir_all(&formats_dir).map_err(|e| format!("创建格式目录失败: {}", e))?;
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let path = formats_dir.join(format!("edit-{}-{}.html", id, millis));
+    if let Err(e) = std::fs::write(&path, &bytes) {
+        return Err(format!("写入富文本文件失败: {}", e));
+    }
+    let new_path = path.to_string_lossy().to_string();
+
+    let db = app_handle.state::<SqlitePool>();
+    let preview = build_preview(&content);
+    let hash = crate::utils::hash::compute_hash(&content);
+
+    // 先取出旧格式路径,UPDATE 成功后删除对应文件
+    let old_paths: Vec<(String,)> = match sqlx::query_as(
+        "SELECT html_path FROM items WHERE id = ? AND html_path IS NOT NULL \
+         UNION ALL \
+         SELECT rtf_path FROM items WHERE id = ? AND rtf_path IS NOT NULL",
+    )
+    .bind(id)
+    .bind(id)
+    .fetch_all(&*db)
+    .await
+    {
+        Ok(paths) => paths,
+        Err(e) => {
+            // 写库前就失败:新文件没有任何条目引用,删掉避免成为孤儿
+            let _ = std::fs::remove_file(&path);
+            return Err(e.to_string());
+        }
+    };
+
+    let result = sqlx::query(
+        "UPDATE items SET content = ?, preview = ?, content_hash = ?, html_path = ?, rtf_path = NULL WHERE id = ?",
+    )
+    .bind(&content)
+    .bind(&preview)
+    .bind(&hash)
+    .bind(&new_path)
+    .bind(id)
+    .execute(&*db)
+    .await;
+
+    let result = match result {
+        Ok(result) => result,
+        Err(e) => {
+            let _ = std::fs::remove_file(&path);
+            return Err(e.to_string());
+        }
+    };
+
+    if result.rows_affected() == 0 {
+        let _ = std::fs::remove_file(&path);
+        return Err("Item not found".to_string());
+    }
+
+    // 删除旧格式文件(守卫式删除,删不掉不阻塞编辑——列已指向新文件,
+    // 残留文件由孤儿清扫回收)
+    for (old,) in &old_paths {
+        crate::services::image_cleanup::remove_format_file(&app_handle, old);
+    }
+
+    // 让列表按新内容重查(前端监听 clipboard-changed 后整表刷新)
+    let _ = app_handle.emit(
+        "clipboard-changed",
+        serde_json::json!({"action": "updated", "id": id}),
+    );
+    Ok(())
+}
+
 /// 富文本预览的返回体。`html` 为 None 表示"这条没有可预览的富格式",
 /// 前端据此隐藏「富文本 / 纯文本」切换,行为与纯文本条目完全一致。
 #[derive(serde::Serialize)]
@@ -584,6 +717,55 @@ mod tests {
     fn extract_fragment_rejects_empty_and_markup_free_input() {
         assert!(extract_fragment(b"").is_none());
         assert!(extract_fragment(b"no markup here").is_none());
+    }
+
+    // ---------- 富文本编辑:CF_HTML 构造 ----------
+
+    /// 构造出的字节块必须能被解析端原样取回片段;含中文时字节偏移
+    /// 与字符偏移相差很大,按字符算会切坏 UTF-8
+    #[test]
+    fn build_cf_html_roundtrips_utf8_fragment() {
+        let fragment = "<p><b>你好</b></p>";
+        let raw = build_cf_html(fragment);
+        assert_eq!(extract_fragment(&raw).as_deref(), Some(fragment));
+        assert!(
+            std::str::from_utf8(&raw).is_ok(),
+            "构造结果必须是合法 UTF-8"
+        );
+    }
+
+    /// 多标签 + 换行 + emoji 仍能往返(偏移量按字节累加,不依赖片段结构)
+    #[test]
+    fn build_cf_html_roundtrips_multiline_fragment() {
+        let fragment = "<div>第一行<br>\n<span style=\"color:red\">红 🎉</span></div>\n<p>尾</p>";
+        let raw = build_cf_html(fragment);
+        assert_eq!(extract_fragment(&raw).as_deref(), Some(fragment));
+    }
+
+    /// 头部四个偏移量按字节自洽:StartHTML/EndHTML 覆盖整个 body,
+    /// 片段区间正好落在标记之间
+    #[test]
+    fn build_cf_html_offsets_are_byte_accurate() {
+        let fragment = "<p>你好</p>";
+        let raw = build_cf_html(fragment);
+        let text = String::from_utf8(raw.clone()).unwrap();
+
+        let field = |name: &str| -> usize {
+            let at = text.find(&format!("{}:", name)).unwrap() + name.len() + 1;
+            text[at..at + 10].parse().unwrap()
+        };
+        let start_html = field("StartHTML");
+        let end_html = field("EndHTML");
+        let start_fragment = field("StartFragment");
+        let end_fragment = field("EndFragment");
+
+        // body 从 StartHTML 开始,到 EndHTML 结束
+        assert!(text[start_html..].starts_with("<html><body>"));
+        assert_eq!(&text[end_html - 7..end_html], "</html>");
+        // 片段区间就是原文(字节切片,不 trim)
+        assert_eq!(&text[start_fragment..end_fragment], fragment);
+        assert!(start_fragment < end_fragment);
+        assert!(end_fragment <= end_html);
     }
 
     // ---------- 富文本预览:净化 ----------

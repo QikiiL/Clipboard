@@ -464,12 +464,13 @@ export const ClipboardItemCard = memo(function ClipboardItemCard({
           {tipRichHtml ? (
             // 富文本气泡:高度固定一档、滚动交给 iframe 自身;外层不再
             // overflow-y-auto,否则会出现内外双滚动条。
-            // srcDoc 与弹窗共用 lib/richPreview(同款 CSP + 字号/图片样式)
+            // srcDoc 与弹窗共用 lib/richPreview(同款 CSP + 排版归一 + 主题色);
+            // bg-surface 让 iframe 底色在载入前就与 srcDoc 的 palette 一致
             <iframe
               title="富文本预览"
               sandbox=""
               srcDoc={buildRichPreviewSrcDoc(tipRichHtml)}
-              className="clip-dialog block w-[320px] h-[200px] rounded-lg shadow-dialog border border-hairline bg-white"
+              className="clip-dialog block w-[320px] h-[200px] rounded-lg shadow-dialog border border-hairline bg-surface"
             />
           ) : (
             <div

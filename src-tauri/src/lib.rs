@@ -357,6 +357,7 @@ pub fn run() {
             commands::clipboard::pause_monitoring,
             commands::clipboard::get_image_base64,
             commands::clipboard::update_item_content,
+            commands::clipboard::update_item_rich_content,
             commands::clipboard::get_rich_preview,
             commands::continuous_paste::start_continuous_paste,
             commands::continuous_paste::start_continuous_paste_auto,
