@@ -63,23 +63,13 @@
 
 ## 下载
 
-- **安装版**：`sparrow-setup.exe`，中文向导，默认安装到 `%LOCALAPPDATA%\Sparrow`，可自选路径；检测到 1.x 旧版时沿用旧安装目录原地升级（见下节）。运行时会请求一次 UAC 确认。
+- **安装版**：`sparrow-setup.exe`，中文向导，默认安装到 `%LOCALAPPDATA%\Sparrow`，可自选路径；运行时会请求一次 UAC 确认。
 - **便携版**：`sparrow.exe`，放进任意文件夹直接运行，`config/` 与 `data/` 自动生成在 exe 同级目录。
 - **GitHub Releases**：<https://github.com/QikiiL/Sparrow/releases/latest>
 - **蓝奏云**：<https://wwbwp.lanzoul.com/b00ybd8mej>（密码 `bdlx`）
 - **系统要求**：Windows 10 / 11（x64），Microsoft Edge WebView2 运行时（安装向导会按需从微软官方地址下载）。
 
 > 应用以管理员权限运行——这是向管理员窗口粘贴、接管 `Win+V` 所必需的。若火绒等安全软件弹出提示，请选择允许。
-
-### 从 1.x 升级
-
-1.x 的旧名是 Clipboard（主程序 `clipboard-manager-tauri.exe`），安装目录由你在向导里选：常见是 `%LOCALAPPDATA%\clipboard`，也可能是 `D:\clipboard` 这类自定义路径。新版安装器**不猜路径**，而是读旧版卸载项里记录的 `InstallLocation`：
-
-- **检测到旧版 → 原地升级**：直接装回旧目录，不再另建 `%LOCALAPPDATA%\Sparrow`。旧 `config/` 与 `data/` 原地保留（历史、设置、图片都不需要迁移），目录页与重装选择页自动跳过，装完自动启动新版。
-- **只有你手动把安装路径改到别的目录时**，安装器才会把旧目录的 `config/` 与 `data/` 复制过去，并且不会覆盖新目录里已有的文件。
-- 安装完成后会清理旧版的卸载项、「设置 → 应用」里的旧条目、`Software\lyz\clipboard` 设置键、开始菜单/桌面快捷方式（`clipboard.lnk` 等）以及旧主程序 `clipboard-manager-tauri.exe`；旧目录里的其它文件不会被删。
-- 旧版的自启动计划任务 `ClipboardManagerAutostart` 会被删除，新版改用 `SparrowAutostart`，不会两个任务同时开机拉起。
-- 如果升级后数据看起来不对，**先别急着删任何东西**：先把安装目录下的 `data` 整个备份一份，再检查其中的 `clipboard.db` 与 `images/`。
 
 ## 为什么叫剪雀
 
