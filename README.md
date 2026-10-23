@@ -17,16 +17,49 @@
 
 ## 界面
 
+三种界面风格，均支持浅色 / 深色主题，可在「设置 → 外观」中切换。点击图片查看 480×760 原图。
+
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshot-light.png" width="300" alt="浅色主题主界面"></td>
-    <td align="center"><img src="docs/screenshot-dark.png" width="300" alt="深色主题主界面"></td>
+    <th align="center">浮笺</th>
+    <th align="center">瑞士索引</th>
+    <th align="center">雾绿工作台</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/screenshot-light.png"><img src="docs/screenshot-light.png" width="200" alt="浮笺 · 浅色"></a></td>
+    <td align="center"><a href="docs/screenshot-swiss-light.png"><img src="docs/screenshot-swiss-light.png" width="200" alt="瑞士索引 · 浅色"></a></td>
+    <td align="center"><a href="docs/screenshot-mist-light.png"><img src="docs/screenshot-mist-light.png" width="200" alt="雾绿工作台 · 浅色"></a></td>
   </tr>
   <tr>
     <td align="center">浅色</td>
+    <td align="center">浅色</td>
+    <td align="center">浅色</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/screenshot-dark.png"><img src="docs/screenshot-dark.png" width="200" alt="浮笺 · 深色"></a></td>
+    <td align="center"><a href="docs/screenshot-swiss-dark.png"><img src="docs/screenshot-swiss-dark.png" width="200" alt="瑞士索引 · 深色"></a></td>
+    <td align="center"><a href="docs/screenshot-mist-dark.png"><img src="docs/screenshot-mist-dark.png" width="200" alt="雾绿工作台 · 深色"></a></td>
+  </tr>
+  <tr>
+    <td align="center">深色</td>
+    <td align="center">深色</td>
     <td align="center">深色</td>
   </tr>
 </table>
+
+## 三个真正的差异点
+
+### 文件类型：把资源管理器里复制的文件原样贴回去
+
+文本、链接、图片之外，剪雀还记录**文件**：在资源管理器里多选复制，粘贴时按 `CF_HDROP` 原样写回，目标程序收到的就是那些文件本身。Windows 自带的 `Win+V` 不记录文件。
+
+### 框选连贴：一次选好，逐条贴入
+
+填表、录数据时最常见：姓名、手机号、地址分别复制过，框选后按你点选的先后顺序逐条贴进目标窗口，不用在窗口之间来回切换。队列由后端持有，面板关掉也照常继续。
+
+### 约 10 MB：隐藏即销毁，唤出即重建
+
+窗口隐藏时会彻底销毁 WebView2 进程树，内存全额归还系统，常驻后台只剩约 10 MB。代价是再次唤出需要约 1 秒重建窗口——闲置时几乎零开销，这是我们主动做的取舍。
 
 ## 下载
 
@@ -47,20 +80,6 @@
 - 安装完成后会清理旧版的卸载项、「设置 → 应用」里的旧条目、`Software\lyz\clipboard` 设置键、开始菜单/桌面快捷方式（`clipboard.lnk` 等）以及旧主程序 `clipboard-manager-tauri.exe`；旧目录里的其它文件不会被删。
 - 旧版的自启动计划任务 `ClipboardManagerAutostart` 会被删除，新版改用 `SparrowAutostart`，不会两个任务同时开机拉起。
 - 如果升级后数据看起来不对，**先别急着删任何东西**：先把安装目录下的 `data` 整个备份一份，再检查其中的 `clipboard.db` 与 `images/`。
-
-## 三个真正的差异点
-
-### 文件类型：把资源管理器里复制的文件原样贴回去
-
-文本、链接、图片之外，剪雀还记录**文件**：在资源管理器里多选复制，粘贴时按 `CF_HDROP` 原样写回，目标程序收到的就是那些文件本身。Windows 自带的 `Win+V` 不记录文件。
-
-### 框选连贴：一次选好，逐条贴入
-
-填表、录数据时最常见：姓名、手机号、地址分别复制过，框选后按你点选的先后顺序逐条贴进目标窗口，不用在窗口之间来回切换。队列由后端持有，面板关掉也照常继续。
-
-### 约 10 MB：隐藏即销毁，唤出即重建
-
-窗口隐藏时会彻底销毁 WebView2 进程树，内存全额归还系统，常驻后台只剩约 10 MB。代价是再次唤出需要约 1 秒重建窗口——闲置时几乎零开销，这是我们主动做的取舍。
 
 ## 为什么叫剪雀
 
